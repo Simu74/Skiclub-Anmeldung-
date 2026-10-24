@@ -98,4 +98,12 @@ function migrate(PDO $pdo): void
         PRAGMA user_version = 1;
         SQL);
     }
+    if ($version < 2) {
+        // Präsenzkontrolle: attended NULL = nicht erfasst, 1 = da, 0 = nicht da
+        $pdo->exec(<<<SQL
+        ALTER TABLE registrations ADD COLUMN attended INTEGER;
+        ALTER TABLE events ADD COLUMN attendance_taken INTEGER NOT NULL DEFAULT 0;
+        PRAGMA user_version = 2;
+        SQL);
+    }
 }

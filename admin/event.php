@@ -5,7 +5,7 @@ require dirname(__DIR__) . '/inc/bootstrap.php';
 $me = require_leader();
 $pdo = db();
 $id = (int)($_GET['id'] ?? 0);
-$tab = in_array($_GET['tab'] ?? '', ['anmeldungen', 'gruppen', 'whatsapp'], true) ? $_GET['tab'] : 'anmeldungen';
+$tab = in_array($_GET['tab'] ?? '', ['anmeldungen', 'praesenz', 'gruppen', 'whatsapp'], true) ? $_GET['tab'] : 'anmeldungen';
 
 function get_event(int $id): array
 {
@@ -62,6 +62,17 @@ if (is_post()) {
                 ->execute([$id, (int)$_POST['kid_id']]);
             flash('Kind abgemeldet.');
             break;
+        case 'presence':
+            $here = array_map('intval', (array)($_POST['here'] ?? []));
+            $pdo->beginTransaction();
+            $set = $pdo->prepare('UPDATE registrations SET attended = ? WHERE event_id = ? AND kid_id = ?');
+            foreach (registered_kids($id) as $k) {
+                $set->execute([in_array((int)$k['id'], $here, true) ? 1 : 0, $id, $k['id']]);
+            }
+            $pdo->prepare('UPDATE events SET attendance_taken = 1 WHERE id = ?')->execute([$id]);
+            $pdo->commit();
+            flash('Präsenz gespeichert: ' . count($here) . ' Kinder da.');
+            break;
         case 'delete':
             if (!empty($_POST['confirm'])) {
                 $pdo->prepare('DELETE FROM events WHERE id = ?')->execute([$id]);
@@ -93,7 +104,7 @@ $st->execute([$id]);
 $notes = $st->fetchAll();
 
 layout_head($ev['title'], admin_nav(), 'index.php');
-$tabs = ['anmeldungen' => 'Anmeldungen (' . count($kidsIn) . ')', 'gruppen' => 'Gruppen', 'whatsapp' => 'WhatsApp'];
+$tabs = ['anmeldungen' => 'Anmeldungen (' . count($kidsIn) . ')', 'praesenz' => 'Präsenz', 'gruppen' => 'Gruppen', 'whatsapp' => 'WhatsApp'];
 ?>
 <div><p class="eyebrow"><a href="index.php">Events</a> · <?= EVENT_TYPES[$ev['type']] ?></p>
   <h1><?= e($ev['title']) ?></h1>
@@ -150,6 +161,19 @@ $tabs = ['anmeldungen' => 'Anmeldungen (' . count($kidsIn) . ')', 'gruppen' => '
     <?php foreach ($silent as $f): ?><p class="row between"><span>Familie <?= e($f['name']) ?></span>
       <?php if ($f['phone'] !== ''): ?><a class="linkbtn" target="_blank" rel="noopener" href="<?= e(wa_link("Hallo Familie {$f['name']}, denkt ihr an die Anmeldung für «{$ev['title']}» am " . fmt_date($ev['date']) . "? Bis " . fmt_deadline($ev['deadline']) . ":\n" . family_link($f), $f['phone'])) ?>">per WhatsApp erinnern</a><?php endif ?></p>
     <?php endforeach ?></div>
+
+<?php elseif ($tab === 'praesenz'): ?>
+  <form method="post" class="card stack"><?= csrf_field() ?><input type="hidden" name="action" value="presence"><input type="hidden" name="tab" value="praesenz">
+    <h3>Wer war da?</h3>
+    <p class="note"><?= $ev['attendance_taken'] ? 'Präsenz ist erfasst und zählt für die Statistik.' : 'Noch nicht erfasst. Alle Angemeldeten sind vorgewählt, bitte fehlende Kinder abwählen.' ?>
+      Kam ein Kind ohne Anmeldung, zuerst unter «Anmeldungen» hinzufügen.</p>
+    <?php foreach ($kidsIn as $k): $here = $k['attended'] === null ? true : (bool)$k['attended']; ?>
+      <label class="kid"><input type="checkbox" name="here[]" value="<?= (int)$k['id'] ?>" <?= $here ? 'checked' : '' ?>>
+        <span class="piste p-<?= piste((int)$k['skill']) ?>"></span>
+        <span class="nm"><?= e($k['first_name'] . ' ' . $k['family_name']) ?></span></label>
+    <?php endforeach ?>
+    <?php if ($kidsIn): ?><button class="btn">Präsenz speichern</button><?php else: ?><p>Keine Anmeldungen.</p><?php endif ?>
+  </form>
 
 <?php elseif ($tab === 'gruppen'):
     $groups = event_groups($ev);

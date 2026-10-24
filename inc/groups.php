@@ -36,7 +36,7 @@ function suggested_group_count(int $kidCount): int
 function registered_kids(int $eventId): array
 {
     $st = db()->prepare(
-        "SELECT k.*, f.name AS family_name FROM registrations r
+        "SELECT k.*, f.name AS family_name, r.attended FROM registrations r
          JOIN kids k ON k.id = r.kid_id JOIN families f ON f.id = k.family_id
          WHERE r.event_id = ? AND r.status = 'in' ORDER BY k.skill DESC, k.birth_year"
     );

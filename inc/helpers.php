@@ -191,5 +191,9 @@ function layout_foot(): void
 
 function admin_nav(): array
 {
-    return ['index.php' => 'Events', 'families.php' => 'Familien', 'leaders.php' => 'Leiter'];
+    $nav = ['index.php' => 'Events', 'families.php' => 'Familien', 'leaders.php' => 'Leiter'];
+    if (current_leader()['is_admin'] ?? false) {
+        $nav['stats.php'] = 'Statistik';
+    }
+    return $nav;
 }

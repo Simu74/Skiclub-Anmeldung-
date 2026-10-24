@@ -18,6 +18,11 @@ Einfache Web-App, mit der Eltern ihre Kinder für Trainings und Rennen anmelden 
 - WhatsApp-Vorlagen: Einladung, Erinnerung, Gruppenliste, Indoor, Findet statt, Absage. Gruppenlisten direkt an die Gruppenleiter (mit Notfallnummern)
 - Familien und Kinder erfassen, Stufe setzen, persönlichen Link per WhatsApp senden
 - Rennkategorie (U10–U16) wird aus dem Jahrgang berechnet
+- Präsenzkontrolle pro Event: abhaken, wer wirklich da war
+
+**Admin**
+- Teilnahmestatistik pro Saison und Art (Off Snow, On Snow, Rennen): Quote pro Kind, Abmeldungen, Krankmeldungen, nicht erschienen, Kinder pro Event
+- Export als Excel-Datei (CSV): pro Kind, pro Event und Anwesenheitsliste (Kinder × Daten, z.B. für J+S)
 
 Stufen: Blau 1–2, Rot 3–4, Schwarz 5.
 

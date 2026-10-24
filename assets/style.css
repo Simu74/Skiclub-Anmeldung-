@@ -121,3 +121,9 @@ textarea, select, input[type=text], input[type=tel], input[type=number], input[t
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg);
   padding: 10px 16px; border-radius: 999px; font-weight: 700; z-index: 30; max-width: 90%; text-align: center; transition: opacity .4s; }
 .toast.hide { opacity: 0; pointer-events: none; }
+
+.quote { display: flex; align-items: center; gap: 8px; flex: none; font-variant-numeric: tabular-nums; }
+.quote b { min-width: 3.2em; text-align: right; }
+.bar { display: block; width: 70px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--accent); }
+.count.small { font-size: 22px; }
