@@ -1,0 +1,5 @@
+# Sicherheit: keine Verzeichnislisten, sensible Dateien sperren
+Options -Indexes
+<FilesMatch "(\.sqlite|\.md|config\.php|\.git.*)$">
+  Require all denied
+</FilesMatch>

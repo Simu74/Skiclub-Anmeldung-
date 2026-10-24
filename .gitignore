@@ -1,0 +1,4 @@
+# Datenbank und lokale Einstellungen nie ins Repository
+data/*
+!data/.htaccess
+config.php
