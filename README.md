@@ -24,8 +24,11 @@ Einfache Web-App, mit der Eltern ihre Kinder für Trainings und Rennen anmelden 
 - Saison vorbereiten: Termine als Serie aus einer Vorlage erstellen (Entwürfe), damit sich die Leiter früh eintragen können
 - Leiterplan: sieht pro Event eingetragene / benötigte Leiter (Bedarf aus Anmeldungen, Gruppen oder fix), ergänzt oder streicht Leiter, «Leiter gesucht» per WhatsApp
 - Gruppen automatisch nach Stufe einteilen (eingetragene Leiter werden den Gruppen automatisch zugeteilt), Kinder verschieben, Leiter ändern
-- Familien und Kinder erfassen, Stufe setzen, Rückmeldungen der Leiter übernehmen
+- Familien und Kinder erfassen (übersichtliche Liste mit Suche, Details zum Aufklappen), Stufe setzen, Rückmeldungen der Leiter übernehmen
+- Excel-Export und -Import für Familien/Kinder und den Leiterplan (mit Vorschau vor dem Übernehmen; ohne PHP-Erweiterung «zip» als CSV)
 - WhatsApp-Vorlagen: Einladung (inkl. Infotext), Erinnerung, Gruppenliste, Indoor, Findet statt, Absage
+
+**Alle Leiter** können ihren Leiterplan für die ganze Saison drucken oder als PDF speichern (alle Termine, nur eigene Einsätze oder Gesamtplan).
 
 **Admin** (alles, zusätzlich)
 - Team verwalten: Personen hinzufügen, Rollen vergeben, Passwörter zurücksetzen

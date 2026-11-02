@@ -72,6 +72,80 @@ if (is_post()) {
     redirect($back . $anchor);
 }
 
+// ---------- Export (Excel) und Druckansicht: immer die ganze Saison
+if (isset($_GET['export']) || isset($_GET['druck'])) {
+    $season = (int)($_GET['saison'] ?? season_year());
+    $st = $pdo->prepare("SELECT e.*, (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = 'in') AS n_in
+        FROM events e WHERE e.status <> 'cancelled' AND e.date BETWEEN ? AND ? ORDER BY e.date, e.time_text");
+    $st->execute([($season - 1) . '-07-01', $season . '-06-30']);
+    $sEvents = $st->fetchAll();
+    $sPlan = [];
+    foreach ($pdo->query('SELECT a.event_id, a.leader_id, a.status, a.note FROM leader_availability a') as $r) $sPlan[$r['event_id']][$r['leader_id']] = $r;
+    $sGroups = [];
+    foreach ($pdo->query('SELECT event_id, leader_id, group_no FROM group_leaders') as $r) $sGroups[$r['event_id']][$r['leader_id']][] = $r['group_no'];
+    $team = $pdo->query('SELECT id, name FROM leaders ORDER BY name')->fetchAll();
+    $label = ($season - 1) . '/' . substr((string)$season, 2);
+
+    if (isset($_GET['export'])) {
+        require dirname(__DIR__) . '/inc/xlsx.php';
+        $rows = [array_merge(['ID', 'Datum', 'Zeit', 'Event', 'Kategorie', 'Status', 'Bedarf'], array_column($team, 'name'), ['Eingetragen'])];
+        foreach ($sEvents as $ev) {
+            $yes = 0; $cells = [];
+            foreach ($team as $l) {
+                $stt = $sPlan[$ev['id']][$l['id']]['status'] ?? '';
+                if ($stt === 'yes') $yes++;
+                $cells[] = $stt === 'yes' ? 'x' : ($stt === 'no' ? 'nein' : '');
+            }
+            $rows[] = array_merge([(int)$ev['id'], date('d.m.Y', strtotime($ev['date'])), $ev['time_text'], $ev['title'], category_name($ev),
+                EVENT_STATUS[$ev['status']], $ev['leaders_needed'] !== null ? (int)$ev['leaders_needed'] : ''], $cells, [$yes]);
+        }
+        xlsx_download('leiterplan-' . str_replace('/', '-', $label) . '.xlsx', 'Leiterplan ' . $label, $rows,
+            array_merge([6, 11, 12, 26, 12, 13, 8], array_fill(0, count($team), 10), [11]));
+    }
+
+    // Druckansicht: «mein» = persönlicher Plan, «alle» = Gesamtplan
+    $all = ($_GET['druck'] ?? '') === 'alle';
+    $onlyMine = !$all && !empty($_GET['nur']);
+    layout_head('Leiterplan drucken', admin_nav(), 'plan.php');
+    ?>
+    <div class="noprint row between"><a class="note" href="plan.php">← Zurück zum Leiterplan</a>
+      <button type="button" class="btn small" data-print>Drucken / als PDF speichern</button></div>
+    <div class="noprint seg">
+      <a class="segbtn" href="?druck=mein" <?= !$all && !$onlyMine ? 'aria-current="page"' : '' ?>>Mein Plan (alle Termine)</a>
+      <a class="segbtn" href="?druck=mein&nur=1" <?= $onlyMine ? 'aria-current="page"' : '' ?>>Nur meine Einsätze</a>
+      <a class="segbtn" href="?druck=alle" <?= $all ? 'aria-current="page"' : '' ?>>Gesamtplan alle Leiter</a>
+    </div>
+    <div><p class="eyebrow"><?= e($config['site_name']) ?> · Saison <?= e($label) ?></p>
+      <h1><?= $all ? 'Leiterplan' : 'Mein Leiterplan: ' . e($me['name']) ?></h1>
+      <p class="note">Stand <?= date('d.m.Y') ?>. <?= $all ? 'x = leitet, – = kann nicht.' : 'Grün = du leitest.' ?> Änderungen bitte im Leiterplan der App eintragen.</p></div>
+    <?php if ($all): ?>
+    <div class="tscroll"><table class="plan-table"><thead><tr><th>Datum</th><th>Event</th><?php foreach ($team as $l): ?><th class="c"><?= e($l['name']) ?></th><?php endforeach ?><th class="c">Total</th></tr></thead><tbody>
+    <?php $mo = ''; foreach ($sEvents as $ev): $m = MONTHS[(int)date('n', strtotime($ev['date']))] . ' ' . date('Y', strtotime($ev['date']));
+        if ($m !== $mo): $mo = $m; ?><tr class="month"><td colspan="<?= count($team) + 3 ?>"><?= e($m) ?></td></tr><?php endif;
+        $need = leaders_needed($ev); $yes = 0; ?>
+      <tr><td><?= fmt_date($ev['date']) ?><br><span class="note"><?= e($ev['time_text']) ?></span></td><td><?= e($ev['title']) ?></td>
+        <?php foreach ($team as $l): $stt = $sPlan[$ev['id']][$l['id']]['status'] ?? ''; if ($stt === 'yes') $yes++; ?>
+          <td class="c"><?= $stt === 'yes' ? '<b>x</b>' : ($stt === 'no' ? '–' : '') ?></td><?php endforeach ?>
+        <td class="c"><?= $yes ?><?= $need !== null ? '/' . $need : '' ?></td></tr>
+    <?php endforeach ?>
+    </tbody></table></div>
+    <?php else: ?>
+    <div class="tscroll"><table class="plan-table"><thead><tr><th>Datum</th><th>Zeit</th><th>Event</th><th>Ort</th><th class="c">Ich</th><th>Bemerkung</th></tr></thead><tbody>
+    <?php $mo = ''; $count = 0; foreach ($sEvents as $ev): $mine = $sPlan[$ev['id']][$me['id']] ?? null; $stt = $mine['status'] ?? '';
+        if ($onlyMine && $stt !== 'yes') continue; if ($stt === 'yes') $count++;
+        $m = MONTHS[(int)date('n', strtotime($ev['date']))] . ' ' . date('Y', strtotime($ev['date']));
+        if ($m !== $mo): $mo = $m; ?><tr class="month"><td colspan="6"><?= e($m) ?></td></tr><?php endif;
+        $grp = $sGroups[$ev['id']][$me['id']] ?? []; ?>
+      <tr class="<?= $stt === 'yes' ? 'mine' : '' ?>"><td><?= fmt_date($ev['date']) ?></td><td><?= e($ev['time_text']) ?></td><td><?= e($ev['title']) ?></td><td><?= e($ev['place']) ?></td>
+        <td class="c"><?= $stt === 'yes' ? '✓' . ($grp ? ' Gr. ' . e(implode(', ', $grp)) : '') : ($stt === 'no' ? '–' : '') ?></td><td><?= e($mine['note'] ?? '') ?></td></tr>
+    <?php endforeach ?>
+    </tbody></table></div>
+    <p><b><?= $count ?></b> Einsätze in der Saison <?= e($label) ?>.</p>
+    <?php endif;
+    layout_foot();
+    exit;
+}
+
 $where = ["e.status <> 'cancelled'"];
 $where[] = $showPast ? 'e.date >= :from' : "e.date >= date('now', 'localtime')";
 $sql = "SELECT e.*,
@@ -107,6 +181,11 @@ foreach ($events as $ev) {
 layout_head('Leiterplan', admin_nav(), 'plan.php');
 ?>
 <div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1>Leiterplan</h1></div>
+
+<div class="row">
+  <a class="btn ghost small" href="?druck=mein">Meinen Plan drucken</a>
+  <?php if ($isHead): ?><a class="btn ghost small" href="?export=1">Export Excel</a><a class="btn ghost small" href="import.php?art=plan">Import Excel</a><?php endif ?>
+</div>
 
 <?php if ($isHead): ?>
 <div class="card stack">

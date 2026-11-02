@@ -160,3 +160,39 @@ h2.month { font-size: 17px; color: var(--muted); margin-top: 6px; }
 .tbtn.yes[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: #fff; }
 .tbtn.no[aria-pressed="true"] { background: var(--flag-soft); border-color: var(--flag); color: var(--flag); }
 input.num { width: 76px; flex: none; }
+
+/* Familienliste zum Aufklappen */
+.famlist { display: flex; flex-direction: column; gap: 6px; }
+details.fam { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+details.fam > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; }
+details.fam > summary::-webkit-details-marker { display: none; }
+details.fam > summary::after { content: '›'; font-size: 22px; color: var(--muted); transition: transform .15s; flex: none; }
+details.fam[open] > summary::after { transform: rotate(90deg); }
+details.fam[open] > summary { border-bottom: 1px solid var(--line); }
+.famname { display: flex; flex-direction: column; min-width: 0; }
+.famname .note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dots { display: flex; gap: 3px; flex: none; margin-left: auto; }
+.fambody { padding: 12px 14px 14px; }
+input[type=search] { width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+
+/* Druckansicht Leiterplan */
+.printpage { max-width: 1000px; }
+.tscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.plan-table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--surface); }
+table.plan-table th, table.plan-table td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+table.plan-table th { background: var(--accent-soft); }
+table.plan-table tr.mine td { background: var(--ok-soft); font-weight: 700; }
+table.plan-table td.c { text-align: center; }
+table.plan-table tr.month td { background: var(--bg); font-weight: 700; color: var(--muted); }
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body { background: #fff !important; color: #000 !important; }
+  .tabs, .userbar, .toast, .noprint { display: none !important; }
+  .app { max-width: none; padding: 0; }
+  .tscroll { overflow: visible; }
+  table.plan-table { font-size: 10pt; }
+  table.plan-table th, table.plan-table td { border-color: #999; }
+  table.plan-table tr.mine td { background: #e3f1e5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table.plan-table th { background: #e6eef6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table.plan-table tr { break-inside: avoid; }
+}

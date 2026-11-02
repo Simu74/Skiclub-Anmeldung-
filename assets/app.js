@@ -41,6 +41,26 @@
     src.addEventListener('input', function () { wa.href = 'https://wa.me/?text=' + encodeURIComponent(src.value); });
   }
 
+  // Liste filtern (z.B. Familien suchen)
+  document.querySelectorAll('input[data-filter]').forEach(function (inp) {
+    var items = document.querySelectorAll(inp.dataset.filter);
+    inp.addEventListener('input', function () {
+      var q = inp.value.trim().toLowerCase();
+      items.forEach(function (it) { it.hidden = q !== '' && (it.dataset.search || '').indexOf(q) === -1; });
+    });
+  });
+
+  // Aufklapp-Eintrag aus dem Link (#f12) öffnen, z.B. nach dem Speichern
+  if (location.hash) {
+    var t = document.getElementById(location.hash.slice(1));
+    if (t && t.tagName === 'DETAILS') { t.open = true; t.scrollIntoView({ block: 'start' }); }
+  }
+
+  // Drucken
+  document.querySelectorAll('[data-print]').forEach(function (b) {
+    b.addEventListener('click', function () { window.print(); });
+  });
+
   // Meldung ausblenden
   var toast = document.querySelector('.toast');
   if (toast) setTimeout(function () { toast.classList.add('hide'); }, 2600);
