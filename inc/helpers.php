@@ -242,7 +242,7 @@ function layout_head(string $title, array $nav = [], string $active = '', ?array
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title><?= e($title) ?> · <?= e($config['site_name']) ?></title>
-<link rel="stylesheet" href="<?= $prefix ?>assets/style.css">
+<link rel="stylesheet" href="<?= $prefix ?>assets/style.css?v=<?= asset_version('style.css') ?>">
 </head>
 <body>
 <main class="app">
@@ -259,10 +259,16 @@ function layout_head(string $title, array $nav = [], string $active = '', ?array
     }
 }
 
+/** Version für CSS/JS-Dateien: ändert sich bei jedem Upload, damit Handys nicht die alte Datei aus dem Cache nehmen. */
+function asset_version(string $file): string
+{
+    return (string)(@filemtime(APP_ROOT . '/assets/' . $file) ?: 1);
+}
+
 function layout_foot(): void
 {
     $prefix = str_ends_with(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/admin') ? '../' : '';
-    echo '</main><script src="' . $prefix . 'assets/app.js"></script></body></html>';
+    echo '</main><script src="' . $prefix . 'assets/app.js?v=' . asset_version('app.js') . '"></script></body></html>';
 }
 
 function admin_nav(): array
