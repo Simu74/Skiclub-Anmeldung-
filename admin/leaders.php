@@ -126,5 +126,4 @@ layout_head('Team', admin_nav(), 'leaders.php');
   <label for="np">Neues Passwort (mind. 10 Zeichen)</label><input type="password" id="np" name="password" minlength="10" autocomplete="new-password" required>
   <button class="btn ghost small">Ändern</button>
 </form>
-<p class="note"><a href="logout.php">Abmelden</a></p>
 <?php layout_foot();

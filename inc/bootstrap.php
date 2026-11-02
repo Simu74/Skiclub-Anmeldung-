@@ -6,13 +6,17 @@ declare(strict_types=1);
 define('APP_ROOT', dirname(__DIR__));
 
 $config = [
-    'site_name' => 'Skiklub Nachwuchs',
+    'site_name' => 'Anmeldungsportal JO SCGK',
     'data_dir'  => APP_ROOT . '/data',
     'base_url'  => '',          // leer = automatisch erkennen
     'timezone'  => 'Europe/Zurich',
 ];
 if (is_file(APP_ROOT . '/config.php')) {
     $config = array_merge($config, require APP_ROOT . '/config.php');
+}
+// Alter Name aus einer früheren config.php: neuen Namen verwenden
+if ($config['site_name'] === 'Skiklub Nachwuchs') {
+    $config['site_name'] = 'Anmeldungsportal JO SCGK';
 }
 date_default_timezone_set($config['timezone']);
 

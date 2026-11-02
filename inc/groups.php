@@ -57,6 +57,20 @@ function regroup_event(int $eventId, int $n): void
     }
     $pdo->prepare('DELETE FROM group_leaders WHERE event_id = ? AND group_no > ?')->execute([$eventId, $n]);
     $pdo->prepare('UPDATE events SET group_count = ? WHERE id = ?')->execute([$n, $eventId]);
+    // Gruppen ohne Leiter mit eingetragenen Leitern aus dem Leiterplan besetzen
+    $taken = $pdo->prepare('SELECT group_no, leader_id FROM group_leaders WHERE event_id = ?');
+    $taken->execute([$eventId]);
+    $byGroup = array_column($taken->fetchAll(), 'leader_id', 'group_no');
+    $st = $pdo->prepare("SELECT a.leader_id FROM leader_availability a JOIN leaders l ON l.id = a.leader_id
+        WHERE a.event_id = ? AND a.status = 'yes' ORDER BY l.name");
+    $st->execute([$eventId]);
+    $free = array_values(array_diff(array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN)), array_map('intval', $byGroup)));
+    $set = $pdo->prepare('INSERT OR REPLACE INTO group_leaders (event_id, group_no, leader_id) VALUES (?, ?, ?)');
+    for ($g = 1; $g <= $n && $free; $g++) {
+        if (empty($byGroup[$g])) {
+            $set->execute([$eventId, $g, array_shift($free)]);
+        }
+    }
     $pdo->commit();
 }
 

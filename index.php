@@ -13,6 +13,29 @@ if ($token !== '' && preg_match('/^[a-f0-9]{32}$/', $token)) {
     $family = $st->fetch() ?: null;
 }
 
+// Familie abmelden (z.B. geteiltes Gerät oder Wechsel zum Leiter-Login)
+if ($family && ($_GET['abmelden'] ?? '') === '1') {
+    if (is_post()) {
+        csrf_check();
+        setcookie('familie', '', ['expires' => time() - 3600, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax',
+            'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off']);
+        flash('Sie sind abgemeldet.');
+        redirect('index.php');
+    }
+    layout_head('Abmelden');
+    ?>
+    <div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1>Abmelden</h1></div>
+    <form method="post" class="card stack"><?= csrf_field() ?>
+      <p>Möchten Sie Familie <b><?= e($family['name']) ?></b> auf diesem Gerät abmelden?</p>
+      <p class="note">Danach brauchen Sie wieder Ihren persönlichen Link aus WhatsApp, um sich anzumelden.</p>
+      <button class="btn">Ja, abmelden</button>
+      <a class="note" href="index.php?f=<?= e($family['token']) ?>">Nein, zurück</a>
+    </form>
+    <?php
+    layout_foot();
+    exit;
+}
+
 if (!$family) {
     layout_head('Anmeldung');
     ?>
@@ -114,7 +137,7 @@ if (is_post()) {
 
 $view = $_GET['view'] ?? 'events';
 $nav = [$self => 'Trainings', $self . '&view=kinder' => 'Meine Kinder'];
-layout_head('Anmeldung', $nav, $view === 'kinder' ? $self . '&view=kinder' : $self);
+layout_head('Anmeldung', $nav, $view === 'kinder' ? $self . '&view=kinder' : $self, ['label' => 'Familie ' . $family['name'], 'href' => $self . '&abmelden=1']);
 
 if ($view === 'kinder'): ?>
   <div><p class="eyebrow">Einmal erfasst, immer vorgewählt</p><h1>Meine Kinder</h1></div>

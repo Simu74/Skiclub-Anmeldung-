@@ -180,4 +180,11 @@ function migrate(PDO $pdo): void
         COMMIT;
         SQL);
     }
+    if ($version < 4) {
+        // Leiterplan: wie viele Leiter braucht ein Event (NULL = aus Anmeldungen berechnen)
+        $pdo->exec(<<<SQL
+        ALTER TABLE events ADD COLUMN leaders_needed INTEGER;
+        PRAGMA user_version = 4;
+        SQL);
+    }
 }

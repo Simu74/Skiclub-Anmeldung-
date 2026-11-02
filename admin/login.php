@@ -25,7 +25,8 @@ if (is_post()) {
     $error = 'Benutzername oder Passwort stimmt nicht.';
 }
 
-layout_head('Login Leiter');
+$cur = current_leader();
+layout_head('Login Leiter', [], '', $cur ? ['label' => $cur['name'] . ' · ' . ROLES[$cur['role']], 'href' => 'logout.php'] : null);
 ?>
 <div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1>Login für Leiter</h1></div>
 <form method="post" class="card stack"><?= csrf_field() ?>

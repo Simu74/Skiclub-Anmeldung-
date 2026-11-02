@@ -144,7 +144,7 @@ layout_head('Familien', admin_nav(), 'families.php');
 
   <div class="row">
     <?php if ($f['phone'] !== ''): ?>
-      <a class="btn small" target="_blank" rel="noopener" href="<?= e(wa_link("Hallo Familie {$f['name']}! Hier ist euer persönlicher Link für die Anmeldung zu Training und Rennen beim {$config['site_name']}:\n$link\n\nTipp: Link speichern oder zum Startbildschirm hinzufügen. Bitte nicht weitergeben.", $f['phone'])) ?>">Link per WhatsApp senden</a>
+      <a class="btn small" target="_blank" rel="noopener" href="<?= e(wa_link("Hallo Familie {$f['name']}! Hier ist euer persönlicher Link für die Anmeldung zu Training und Rennen im {$config['site_name']}:\n$link\n\nTipp: Link speichern oder zum Startbildschirm hinzufügen. Bitte nicht weitergeben.", $f['phone'])) ?>">Link per WhatsApp senden</a>
     <?php endif ?>
     <input type="text" id="link-<?= (int)$f['id'] ?>" value="<?= e($link) ?>" readonly class="linkfield" aria-label="Persönlicher Link">
     <button type="button" class="btn ghost small" data-copy="link-<?= (int)$f['id'] ?>">Link kopieren</button>

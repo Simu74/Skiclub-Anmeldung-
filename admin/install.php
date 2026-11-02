@@ -17,8 +17,8 @@ if (is_post()) {
     if ($name === '' || $user === '' || strlen($pass) < 10) {
         $error = 'Bitte alle Felder ausfüllen. Das Passwort braucht mindestens 10 Zeichen.';
     } else {
-        db()->prepare('INSERT INTO leaders (name, phone, username, pass_hash, is_admin, role) VALUES (?, ?, ?, ?, 1, 'admin')')
-            ->execute([$name, trim((string)($_POST['phone'] ?? '')), $user, password_hash($pass, PASSWORD_DEFAULT)]);
+        db()->prepare('INSERT INTO leaders (name, phone, username, pass_hash, is_admin, role) VALUES (?, ?, ?, ?, 1, ?)')
+            ->execute([$name, trim((string)($_POST['phone'] ?? '')), $user, password_hash($pass, PASSWORD_DEFAULT), 'admin']);
         $_SESSION['leader_id'] = (int)db()->lastInsertId();
         flash('Eingerichtet. Willkommen!');
         redirect('index.php');
