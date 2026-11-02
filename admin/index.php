@@ -14,7 +14,7 @@ $sql = 'SELECT e.*,
     (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = \'in\') AS n_in,
     (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = \'out\') AS n_out,
     (SELECT COALESCE(SUM(seats), 0) FROM drivers d WHERE d.event_id = e.id) AS seats,
-    (SELECT COUNT(*) FROM leader_availability a WHERE a.event_id = e.id AND a.status = \'yes\') AS n_leaders,
+    (SELECT COUNT(*) FROM leader_availability a JOIN leaders l ON l.id = a.leader_id WHERE a.event_id = e.id AND a.status = \'yes\' AND l.role <> \'admin\') AS n_leaders,
     (SELECT status FROM leader_availability a WHERE a.event_id = e.id AND a.leader_id = :me) AS my_status,
     (SELECT GROUP_CONCAT(group_no) FROM group_leaders g WHERE g.event_id = e.id AND g.leader_id = :me) AS my_groups
   FROM events e ' . ($where ? 'WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY e.date' . ($showPast ? ' DESC' : '');
@@ -53,7 +53,7 @@ layout_head('Events', admin_nav(), 'index.php');
   </div>
   <?php if ($ev['my_groups']): ?><p>Du leitest <b>Gruppe <?= e(str_replace(',', ', ', $ev['my_groups'])) ?></b>.</p>
   <?php elseif ($ev['my_status'] === 'yes'): ?><p class="note">Du bist im Leiterplan eingetragen.</p>
-  <?php elseif ($ev['my_status'] === null && $ev['status'] === 'open'): ?><p class="note">Du hast dich im <a href="plan.php#e<?= (int)$ev['id'] ?>">Leiterplan</a> noch nicht eingetragen.</p><?php endif ?>
+  <?php elseif ($ev['my_status'] === null && $ev['status'] === 'open' && leads($me)): ?><p class="note">Du hast dich im <a href="plan.php#e<?= (int)$ev['id'] ?>">Leiterplan</a> noch nicht eingetragen.</p><?php endif ?>
   <a class="btn ghost small" href="event.php?id=<?= (int)$ev['id'] ?>">Öffnen</a>
 </article>
 <?php endforeach ?>

@@ -196,3 +196,4 @@ table.plan-table tr.month td { background: var(--bg); font-weight: 700; color: v
   table.plan-table th { background: #e6eef6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   table.plan-table tr { break-inside: avoid; }
 }
+[hidden] { display: none !important; }

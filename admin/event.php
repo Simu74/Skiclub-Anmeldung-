@@ -90,7 +90,7 @@ if (is_post()) {
             flash('Präsenz gespeichert: ' . count($here) . ' Kinder da.');
             break;
         case 'availability':
-            $s = $_POST['status'] ?? '';
+            $s = leads($me) ? ($_POST['status'] ?? '') : '';
             if ($s === 'clear') {
                 $pdo->prepare('DELETE FROM leader_availability WHERE event_id = ? AND leader_id = ?')->execute([$id, $me['id']]);
             } elseif (in_array($s, ['yes', 'no'], true)) {
@@ -154,12 +154,12 @@ $st = $pdo->prepare('SELECT * FROM families f WHERE NOT EXISTS (SELECT 1 FROM re
     WHERE r.event_id = ? AND k.family_id = f.id) AND EXISTS (SELECT 1 FROM kids k WHERE k.family_id = f.id AND k.active = 1) ORDER BY name');
 $st->execute([$id]);
 $silent = $st->fetchAll();
-$leaders = $pdo->query('SELECT id, name, phone FROM leaders ORDER BY name')->fetchAll();
+$leaders = $pdo->query("SELECT id, name, phone FROM leaders WHERE role <> 'admin' ORDER BY name")->fetchAll();
 $leaderById = array_column($leaders, null, 'id');
 $st = $pdo->prepare('SELECT note, k.first_name FROM registrations r JOIN kids k ON k.id = r.kid_id WHERE r.event_id = ? AND r.status = \'in\' AND note <> \'\'');
 $st->execute([$id]);
 $notes = $st->fetchAll();
-$st = $pdo->prepare('SELECT a.*, l.name FROM leader_availability a JOIN leaders l ON l.id = a.leader_id WHERE a.event_id = ? ORDER BY a.status DESC, l.name');
+$st = $pdo->prepare("SELECT a.*, l.name FROM leader_availability a JOIN leaders l ON l.id = a.leader_id WHERE a.event_id = ? AND l.role <> 'admin' ORDER BY a.status DESC, l.name");
 $st->execute([$id]);
 $availability = $st->fetchAll();
 $avail = array_column($availability, null, 'leader_id');
@@ -221,7 +221,7 @@ layout_head($ev['title'], admin_nav(), 'index.php');
 </details>
 <?php endif ?>
 
-<?php if ($ev['status'] !== 'cancelled'): ?>
+<?php if ($ev['status'] !== 'cancelled' && leads($me)): ?>
 <form method="post" class="card stack"><?= csrf_field() ?><input type="hidden" name="action" value="availability"><input type="hidden" name="tab" value="<?= e($tab) ?>">
   <div class="row between"><h3>Leiterplan</h3>
     <?php if ($mine): ?><span class="pill <?= $mine['status'] === 'yes' ? 'open' : 'cancelled' ?>"><?= $mine['status'] === 'yes' ? 'Ich bin dabei' : 'Ich kann nicht' ?></span><?php endif ?></div>

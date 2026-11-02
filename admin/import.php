@@ -146,7 +146,7 @@ function import_plan(array $rows, bool $apply): array
         return $rep;
     }
     $leaders = [];
-    foreach ($pdo->query('SELECT id, name FROM leaders') as $l) $leaders[mb_strtolower(trim($l['name']))] = $l;
+    foreach ($pdo->query("SELECT id, name FROM leaders WHERE role <> 'admin'") as $l) $leaders[mb_strtolower(trim($l['name']))] = $l;
     $cols = [];
     $skipHead = ['id', 'datum', 'zeit', 'event', 'titel', 'kategorie', 'status', 'bedarf', 'leiter benötigt', 'eingetragen', 'ort'];
     foreach ($head as $i => $h) {
