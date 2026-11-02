@@ -58,7 +58,17 @@
 
   // Drucken
   document.querySelectorAll('[data-print]').forEach(function (b) {
-    b.addEventListener('click', function () { window.print(); });
+    b.addEventListener('click', function () {
+      // Als App vom Home-Bildschirm (iPhone/Android) gibt es kein Druckfenster:
+      // dann die Seite im normalen Browser öffnen, dort klappt das Drucken.
+      var app = window.navigator.standalone === true ||
+        (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+      if (app || typeof window.print !== 'function') {
+        window.open(location.href, '_blank');
+        return;
+      }
+      window.print();
+    });
   });
 
   // Meldung ausblenden
