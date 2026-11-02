@@ -110,6 +110,7 @@ if (isset($_GET['export']) || isset($_GET['druck'])) {
     ?>
     <div class="noprint row between"><a class="note" href="plan.php">← Zurück zum Leiterplan</a>
       <button type="button" class="btn small" data-print>Drucken / als PDF speichern</button></div>
+    <p class="noprint note">Öffnet sich kein Druckfenster? Die Seite im Browser öffnen (nicht aus WhatsApp oder vom Home-Bildschirm) und dort im Menü <b>Teilen → Drucken</b> (iPhone) oder <b>⋮ → Teilen → Drucken</b> (Android) wählen. Dort lässt sich der Plan auch als PDF sichern.</p>
     <div class="noprint seg">
       <a class="segbtn" href="?druck=mein" <?= !$all && !$onlyMine ? 'aria-current="page"' : '' ?>>Mein Plan (alle Termine)</a>
       <a class="segbtn" href="?druck=mein&nur=1" <?= $onlyMine ? 'aria-current="page"' : '' ?>>Nur meine Einsätze</a>
