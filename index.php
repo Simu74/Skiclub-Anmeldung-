@@ -82,8 +82,8 @@ if (is_post()) {
             }
             if (!empty($_POST['driver'])) {
                 $seats = max(1, min(8, (int)($_POST['seats'] ?? 1)));
-                $pdo->prepare('INSERT OR REPLACE INTO drivers (event_id, family_id, seats) VALUES (?, ?, ?)')
-                    ->execute([$event['id'], $family['id'], $seats]);
+                $pdo->prepare('INSERT OR REPLACE INTO drivers (event_id, family_id, seats, note) VALUES (?, ?, ?, ?)')
+                    ->execute([$event['id'], $family['id'], $seats, trim(mb_substr((string)($_POST['driver_note'] ?? ''), 0, 200))]);
             } else {
                 $pdo->prepare('DELETE FROM drivers WHERE event_id = ? AND family_id = ?')->execute([$event['id'], $family['id']]);
             }
@@ -151,9 +151,9 @@ if ($events && $kidIds) {
         $regs[$r['event_id']][$r['kid_id']] = $r;
     }
 }
-$st = $pdo->prepare('SELECT event_id, seats FROM drivers WHERE family_id = ?');
+$st = $pdo->prepare('SELECT event_id, seats, note FROM drivers WHERE family_id = ?');
 $st->execute([$family['id']]);
-$drivers = array_column($st->fetchAll(), 'seats', 'event_id');
+$drivers = array_column($st->fetchAll(), null, 'event_id');
 ?>
   <div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1>Hallo Familie <?= e($family['name']) ?></h1></div>
 
@@ -161,7 +161,7 @@ $drivers = array_column($st->fetchAll(), 'seats', 'event_id');
     <div class="banner <?= $next['status'] === 'cancelled' ? 'cancel' : 'ok' ?>">
       <span class="dot"></span>
       <div><b><?= $next['status'] === 'cancelled' ? 'Abgesagt' : 'Als Nächstes' ?>: <?= fmt_date($next['date']) ?></b>
-      <p><?= e($next['info'] !== '' ? $next['info'] : $next['title'] . ', ' . $next['place']) ?></p></div>
+      <p><?= e($next['info'] !== '' ? $next['info'] : $next['title'] . ($next['place'] !== '' ? ', ' . $next['place'] : '')) ?></p></div>
     </div>
   <?php else: ?>
     <div class="card"><p>Im Moment sind keine Trainings ausgeschrieben.</p></div>
@@ -177,7 +177,7 @@ $drivers = array_column($st->fetchAll(), 'seats', 'event_id');
   ?>
   <article class="card">
     <div class="row between"><span class="date"><?= fmt_date($ev['date']) ?><?= $ev['time_text'] !== '' ? ' · ' . e($ev['time_text']) : '' ?></span>
-      <span class="pill <?= e($ev['type']) ?>"><?= EVENT_TYPES[$ev['type']] ?></span></div>
+      <span class="pill <?= e($ev['type']) ?>"><?= e(category_name($ev)) ?></span></div>
     <h2><?= e($ev['title']) ?></h2>
     <dl class="meta">
       <?php if ($ev['place'] !== ''): ?><dt>Ort</dt><dd><?= e($ev['place']) ?></dd><?php endif ?>
@@ -185,6 +185,12 @@ $drivers = array_column($st->fetchAll(), 'seats', 'event_id');
       <dt>Anmelden bis</dt><dd><?= fmt_deadline($ev['deadline']) ?></dd>
     </dl>
     <?php if ($ev['info'] !== '' && $ev !== $events[0]): ?><p class="note"><?= e($ev['info']) ?></p><?php endif ?>
+    <?php if ($ev['details'] !== ''): ?>
+      <details class="more" <?= mb_strlen($ev['details']) < 280 ? 'open' : '' ?>><summary>Infos</summary><?= format_text($ev['details']) ?></details>
+    <?php endif ?>
+    <?php foreach (event_files((int)$ev['id']) as $f): ?>
+      <a class="file" href="download.php?id=<?= (int)$f['id'] ?>&amp;f=<?= e($family['token']) ?>" target="_blank" rel="noopener">📎 <?= e($f['orig_name']) ?> <span class="note">(<?= fmt_size((int)$f['size']) ?>)</span></a>
+    <?php endforeach ?>
 
     <?php if ($cancelled): ?>
       <span class="pill cancelled">Abgesagt</span>
@@ -193,7 +199,7 @@ $drivers = array_column($st->fetchAll(), 'seats', 'event_id');
         <div class="chips">
           <?php foreach ($mineIn as $k): ?><span class="chip yes">✓ <?= e($k['first_name']) ?></span><?php endforeach ?>
           <?php foreach ($mineOut as $k): ?><span class="chip"><?= e($k['first_name']) ?>: abgemeldet</span><?php endforeach ?>
-          <?php if (isset($drivers[$ev['id']])): ?><span class="chip yes">Sie fahren · <?= (int)$drivers[$ev['id']] ?> Plätze</span><?php endif ?>
+          <?php if (isset($drivers[$ev['id']])): ?><span class="chip yes">Sie fahren · <?= (int)$drivers[$ev['id']]['seats'] ?> Plätze</span><?php endif ?>
         </div>
       <?php endif ?>
 
@@ -215,8 +221,12 @@ $drivers = array_column($st->fetchAll(), 'seats', 'event_id');
           <?php endforeach ?>
           <label class="switch"><span><b>Ich kann fahren</b><br><span class="note">für Fahrgemeinschaften</span></span>
             <input type="checkbox" name="driver" value="1" data-toggle="seats-<?= (int)$ev['id'] ?>" <?= isset($drivers[$ev['id']]) ? 'checked' : '' ?>></label>
-          <label class="switch" id="seats-<?= (int)$ev['id'] ?>" <?= isset($drivers[$ev['id']]) ? '' : 'hidden' ?>><b>Freie Plätze</b>
-            <select name="seats"><?php for ($i = 1; $i <= 8; $i++): ?><option <?= ($drivers[$ev['id']] ?? 3) == $i ? 'selected' : '' ?>><?= $i ?></option><?php endfor ?></select></label>
+          <div class="stack" id="seats-<?= (int)$ev['id'] ?>" <?= isset($drivers[$ev['id']]) ? '' : 'hidden' ?>>
+            <label class="switch"><b>Freie Plätze</b>
+              <select name="seats"><?php for ($i = 1; $i <= 8; $i++): ?><option <?= ($drivers[$ev['id']]['seats'] ?? 3) == $i ? 'selected' : '' ?>><?= $i ?></option><?php endfor ?></select></label>
+            <label for="dn-<?= (int)$ev['id'] ?>" class="note">Abfahrt / Treffpunkt (freiwillig)</label>
+            <input type="text" id="dn-<?= (int)$ev['id'] ?>" name="driver_note" maxlength="200" value="<?= e($drivers[$ev['id']]['note'] ?? '') ?>" placeholder="z.B. 8:45 ab Dorfplatz, Hin- und Rückfahrt">
+          </div>
           <label for="note-<?= (int)$ev['id'] ?>" class="note">Bemerkung an die Leiter (freiwillig)</label>
           <input type="text" id="note-<?= (int)$ev['id'] ?>" name="note" maxlength="300" placeholder="z.B. wird um 15:30 abgeholt">
           <button class="btn" data-count-label="Anmeldung senden">Anmeldung senden</button>

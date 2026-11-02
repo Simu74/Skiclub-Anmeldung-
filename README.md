@@ -5,26 +5,31 @@ Einfache Web-App, mit der Eltern ihre Kinder für Trainings und Rennen anmelden 
 ## Was die App kann
 
 **Eltern** (persönlicher Link, kein Passwort, keine App-Installation)
-- Kinder sind vorgewählt, Häkchen setzen und eine Anmeldung pro Familie senden
-- «Ich kann fahren» mit Anzahl freier Plätze
-- Abmelden oder krankmelden, Bemerkung an die Leiter
+- Kinder sind vorgewählt, Häkchen setzen und eine Anmeldung pro Familie senden; abmelden oder krankmelden
+- Fahrgelegenheit anbieten: Anzahl freie Plätze und Abfahrt/Treffpunkt
+- Infos zum Event (formatierter Text) und Anhänge wie die Ausschreibung ansehen
 - Notfallnummer und Gesundheitshinweise pflegen (sehen nur Leiter)
 
-**Leiter** (Login mit Benutzername und Passwort)
-- Events aus Vorlagen erstellen (Off Snow Sa, On Snow Sa/Mi, Rennen), als Entwurf vorbereiten und freischalten, absagen
-- Mindeststufe pro Event (z.B. On Snow im November nur ab Stufe Rot)
-- Anmeldungen, Abmeldungen, Fahrer und Familien ohne Antwort sehen
-- Gruppen automatisch nach Stufe einteilen, alle gleich gross; Kinder verschieben, Leiter zuweisen
-- WhatsApp-Vorlagen: Einladung, Erinnerung, Gruppenliste, Indoor, Findet statt, Absage. Gruppenlisten direkt an die Gruppenleiter (mit Notfallnummern)
-- Familien und Kinder erfassen, Stufe setzen, persönlichen Link per WhatsApp senden
-- Rennkategorie (U10–U16) wird aus dem Jahrgang berechnet
-- Präsenzkontrolle pro Event: abhaken, wer wirklich da war
+**Leiter**
+- Sieht freigeschaltete Events, Anmeldungen und Gruppeneinteilungen
+- Meldet sich pro Event als Gruppenleiter («Ich kann eine Gruppe leiten» / «Ich kann nicht», mit Bemerkung)
+- Erfasst vor Ort die Präsenz (nach Gruppen sortiert)
+- Gibt Rückmeldungen zu Kindern: neue Stufe vorschlagen, Verletzung, Notiz
 
-**Admin**
-- Teilnahmestatistik pro Saison und Art (Off Snow, On Snow, Rennen): Quote pro Kind, Abmeldungen, Krankmeldungen, nicht erschienen, Kinder pro Event
-- Export als Excel-Datei (CSV): pro Kind, pro Event und Anwesenheitsliste (Kinder × Daten, z.B. für J+S)
+**Hauptleiter** (alles vom Leiter, zusätzlich)
+- Events aus Vorlagen erstellen, als Entwurf vorbereiten, freischalten, absagen
+- Kategorien erstellen und umbenennen, Vorlagen erstellen, umbenennen und bearbeiten
+- Infotext mit Formatierung (*fett*, _kursiv_, Aufzählungen, Links) und Anhänge (PDF, Bilder, Word, Excel, max. 10 MB)
+- Gruppen automatisch nach Stufe einteilen, Kinder verschieben, Leiter zuweisen (verfügbare Leiter sind mit ✓ markiert)
+- Familien und Kinder erfassen, Stufe setzen, Rückmeldungen der Leiter übernehmen
+- WhatsApp-Vorlagen: Einladung (inkl. Infotext), Erinnerung, Gruppenliste, Indoor, Findet statt, Absage
 
-Stufen: Blau 1–2, Rot 3–4, Schwarz 5.
+**Admin** (alles, zusätzlich)
+- Team verwalten: Personen hinzufügen, Rollen vergeben, Passwörter zurücksetzen
+- Teilnahmestatistik pro Saison und Kategorie mit Export (pro Kind, pro Event, Anwesenheitsliste für J+S)
+- Events endgültig löschen
+
+Stufen: Blau 1–2, Rot 3–4, Schwarz 5. Rennkategorien (U10–U16) werden aus dem Jahrgang berechnet.
 
 ## Installation auf dem Webhosting
 
@@ -33,7 +38,7 @@ Voraussetzung: PHP 8.1 oder neuer mit SQLite (bei Hostpoint, cyon, Infomaniak us
 1. Alle Dateien per FTP in einen Ordner des Webhostings hochladen, z.B. auf eine Subdomain `anmeldung.skiklub-xy.ch`.
 2. Prüfen, dass der Ordner `data/` beschreibbar ist (Rechte 750 oder 755). Dort legt die App die Datenbank an.
 3. Im Browser `https://…/admin/` öffnen. Beim ersten Mal erscheint «Admin anlegen». Name, Benutzername und Passwort eingeben.
-4. Unter **Leiter** die anderen Leiter erfassen, unter **Familien** die Familien mit Kindern. Danach jeder Familie den Link per WhatsApp senden.
+4. Unter **Team** die Hauptleiter und Leiter mit ihrer Rolle erfassen, unter **Familien** die Familien mit Kindern. Danach jeder Familie den Link per WhatsApp senden.
 5. Unter **Events** das erste Training aus einer Vorlage erstellen und freischalten.
 
 HTTPS (SSL-Zertifikat) im Hosting-Panel einschalten, das ist bei den meisten Anbietern gratis.
@@ -52,6 +57,10 @@ Optional: `config.sample.php` als `config.php` kopieren, um den Klubnamen zu än
 ## Update
 
 Neue Version per FTP hochladen und dabei den Ordner `data/` und eine eventuelle `config.php` **nicht** überschreiben. Datenbank-Änderungen macht die App beim nächsten Aufruf selbst.
+
+Beim Update auf die Version mit Rollen werden bestehende Admins zu **Admin** und alle anderen Leiter zu **Hauptleiter**, damit niemand Rechte verliert. Danach unter **Team** die Rollen anpassen.
+
+Anhänge liegen in `data/uploads/` und sind wie die Datenbank vor direktem Zugriff geschützt. Erlaubt das Hosting kleinere Uploads als 10 MB, gilt dessen Grenze (`upload_max_filesize` in den PHP-Einstellungen).
 
 ## Lokal ausprobieren
 

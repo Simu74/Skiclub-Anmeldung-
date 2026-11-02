@@ -5,11 +5,12 @@
 declare(strict_types=1);
 require dirname(__DIR__) . '/inc/bootstrap.php';
 
-require_leader(true);
+require_leader('admin');
 $pdo = db();
 
 $season = (int)($_GET['saison'] ?? season_year());
-$type = array_key_exists($_GET['art'] ?? '', EVENT_TYPES) ? $_GET['art'] : '';
+$cats = categories();
+$type = isset($cats[(int)($_GET['art'] ?? 0)]) ? (int)$_GET['art'] : 0;
 $from = ($season - 1) . '-07-01';
 $to = min($season . '-06-30', date('Y-m-d'));
 
@@ -18,7 +19,7 @@ $sql = "SELECT e.*,
     (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = 'in' AND r.attended = 1) AS n_here,
     (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = 'out') AS n_out,
     (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = 'out' AND r.reason = 'Krank') AS n_sick
-  FROM events e WHERE e.status = 'open' AND e.date BETWEEN :from AND :to" . ($type ? ' AND e.type = :type' : '') . ' ORDER BY e.date';
+  FROM events e WHERE e.status = 'open' AND e.date BETWEEN :from AND :to" . ($type ? ' AND e.category_id = :type' : '') . ' ORDER BY e.date';
 $st = $pdo->prepare($sql);
 $st->execute(['from' => $from, 'to' => $to] + ($type ? ['type' => $type] : []));
 $events = $st->fetchAll();
@@ -80,7 +81,7 @@ if (isset($_GET['csv'])) {
     } elseif ($_GET['csv'] === 'events') {
         fputcsv($out, ['Datum', 'Art', 'Titel', 'Angemeldet', 'Teilgenommen', 'Abgemeldet', 'davon krank', 'Präsenz erfasst'], ';');
         foreach ($events as $e) {
-            fputcsv($out, [date('d.m.Y', strtotime($e['date'])), EVENT_TYPES[$e['type']], $e['title'], $e['n_in'], $e['n_part'], $e['n_out'], $e['n_sick'], $e['attendance_taken'] ? 'ja' : 'nein'], ';');
+            fputcsv($out, [date('d.m.Y', strtotime($e['date'])), category_name($e), $e['title'], $e['n_in'], $e['n_part'], $e['n_out'], $e['n_sick'], $e['attendance_taken'] ? 'ja' : 'nein'], ';');
         }
     } else {
         fputcsv($out, ['Vorname', 'Name', 'Jahrgang', 'Stufe', 'Teilnahmen', 'von Events', 'Quote %', 'Abgemeldet', 'davon krank', 'Angemeldet, nicht erschienen'], ';');
@@ -102,8 +103,8 @@ layout_head('Statistik', admin_nav(), 'stats.php');
 
 <form method="get" class="card"><div class="row"><label for="saison" class="note">Saison</label>
   <select id="saison" name="saison" data-autosubmit><?php for ($y = season_year() + 0; $y >= season_year() - 4; $y--): ?><option value="<?= $y ?>" <?= $y === $season ? 'selected' : '' ?>><?= $y - 1 ?>/<?= substr((string)$y, 2) ?></option><?php endfor ?></select>
-  <label for="art" class="note">Art</label>
-  <select id="art" name="art" data-autosubmit><option value="">Alle</option><?php foreach (EVENT_TYPES as $k => $v): ?><option value="<?= $k ?>" <?= $type === $k ? 'selected' : '' ?>><?= $v ?></option><?php endforeach ?></select>
+  <label for="art" class="note">Kategorie</label>
+  <select id="art" name="art" data-autosubmit><option value="">Alle</option><?php foreach ($cats as $k => $c): ?><option value="<?= $k ?>" <?= $type === $k ? 'selected' : '' ?>><?= e($c['name']) ?></option><?php endforeach ?></select>
   <input type="hidden" name="sort" value="<?= e($sort) ?>"><noscript><button class="btn ghost small">Zeigen</button></noscript></div>
 </form>
 
@@ -141,7 +142,7 @@ layout_head('Statistik', admin_nav(), 'stats.php');
   <h3>Pro Event</h3>
   <?php foreach (array_reverse($events) as $e): ?>
     <div class="gkid"><span class="nm"><a href="event.php?id=<?= (int)$e['id'] ?>&amp;tab=praesenz"><?= fmt_date($e['date']) ?> · <?= e($e['title']) ?></a><br>
-      <span class="note"><?= EVENT_TYPES[$e['type']] ?> · <?= (int)$e['n_in'] ?> angemeldet · <?= (int)$e['n_out'] ?> abgemeldet<?= $e['attendance_taken'] ? '' : ' · Präsenz fehlt' ?></span></span>
+      <span class="note"><?= e(category_name($e)) ?> · <?= (int)$e['n_in'] ?> angemeldet · <?= (int)$e['n_out'] ?> abgemeldet<?= $e['attendance_taken'] ? '' : ' · Präsenz fehlt' ?></span></span>
       <span class="count small"><?= $e['n_part'] ?></span></div>
   <?php endforeach ?>
   <?php if (!$events): ?><p>In dieser Saison gibt es noch keine durchgeführten Events.</p><?php endif ?>
