@@ -25,12 +25,7 @@ if ($id) {
     $st->execute([(int)($_GET['vorlage'] ?? 0)]);
     $t = $st->fetch() ?: ['category_id' => array_key_first($cats), 'title' => '', 'weekday' => 6, 'time_text' => '', 'place' => '',
         'material' => '', 'details' => '', 'min_skill' => 1, 'deadline_days' => 2];
-    $date = next_weekday((int)$t['weekday']);
-    $ev = [
-        'id' => 0, 'category_id' => $t['category_id'], 'title' => $t['title'], 'date' => $date, 'time_text' => $t['time_text'],
-        'place' => $t['place'], 'material' => $t['material'], 'details' => $t['details'], 'min_skill' => $t['min_skill'],
-        'deadline' => date('Y-m-d', strtotime($date . ' -' . (int)$t['deadline_days'] . ' days')) . ' 20:00', 'info' => '', 'status' => 'draft',
-    ];
+    $ev = event_from_template($t, next_weekday((int)$t['weekday']));
 }
 
 $error = '';

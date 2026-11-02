@@ -5,6 +5,7 @@ const EVENT_TYPES = ['off' => 'Off Snow', 'on' => 'On Snow', 'race' => 'Rennen']
 const EVENT_STATUS = ['draft' => 'Entwurf', 'open' => 'Freigeschaltet', 'cancelled' => 'Abgesagt'];
 const SKILLS = [1 => 'Blau 1', 2 => 'Blau 2', 3 => 'Rot 3', 4 => 'Rot 4', 5 => 'Schwarz 5'];
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+const MONTHS = [1 => 'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const WEEKDAY_NAMES = [1 => 'Montag', 2 => 'Dienstag', 3 => 'Mittwoch', 4 => 'Donnerstag', 5 => 'Freitag', 6 => 'Samstag', 0 => 'Sonntag'];
 const ROLES = ['leiter' => 'Leiter', 'hauptleiter' => 'Hauptleiter', 'admin' => 'Admin'];
 const ROLE_RANK = ['leiter' => 1, 'hauptleiter' => 2, 'admin' => 3];
@@ -223,9 +224,16 @@ function initial_name(array $kid): string
     return $kid['first_name'] . ' ' . mb_substr($kid['family_name'], 0, 1) . '.';
 }
 
-function layout_head(string $title, array $nav = [], string $active = ''): void
+/**
+ * Seitenkopf. $bar = ['label' => 'Wer ist angemeldet', 'href' => 'Abmelde-Link'];
+ * auf Leiter-Seiten wird die Leiste automatisch gezeigt.
+ */
+function layout_head(string $title, array $nav = [], string $active = '', ?array $bar = null): void
 {
     global $config;
+    if ($bar === null && $nav && ($me = current_leader())) {
+        $bar = ['label' => $me['name'] . ' · ' . ROLES[$me['role']], 'href' => 'logout.php'];
+    }
     $prefix = str_ends_with(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/admin') ? '../' : '';
     ?><!doctype html>
 <html lang="de-CH">
@@ -239,6 +247,7 @@ function layout_head(string $title, array $nav = [], string $active = ''): void
 <body>
 <main class="app">
 <?php if ($m = flash()): ?><div class="toast" role="status"><?= e($m) ?></div><?php endif ?>
+<?php if ($bar): ?><div class="userbar"><span class="note">Angemeldet: <b><?= e($bar['label']) ?></b></span><a class="btn ghost small" href="<?= e($bar['href']) ?>">Abmelden</a></div><?php endif ?>
 <?php
     if ($nav) {
         echo '<nav class="tabs" aria-label="Navigation"><div class="in">';
@@ -259,7 +268,7 @@ function layout_foot(): void
 function admin_nav(): array
 {
     $me = current_leader();
-    $nav = ['index.php' => 'Events'];
+    $nav = ['index.php' => 'Events', 'plan.php' => 'Plan'];
     if (has_role($me, 'hauptleiter')) {
         $nav['families.php'] = 'Familien';
         $nav['templates.php'] = 'Vorlagen';
@@ -305,4 +314,26 @@ function store_upload(int $eventId, ?array $file): string
     db()->prepare('INSERT INTO event_files (event_id, orig_name, stored_name, mime, size) VALUES (?, ?, ?, ?, ?)')
         ->execute([$eventId, mb_substr($name, 0, 120), $stored, UPLOAD_TYPES[$ext], (int)$file['size']]);
     return 'Anhang hochgeladen.';
+}
+
+/** Neues Event (Entwurf) aus einer Vorlage für ein bestimmtes Datum. */
+function event_from_template(array $t, string $date): array
+{
+    return [
+        'id' => 0, 'category_id' => $t['category_id'], 'title' => $t['title'], 'date' => $date, 'time_text' => $t['time_text'],
+        'place' => $t['place'], 'material' => $t['material'], 'details' => $t['details'], 'min_skill' => $t['min_skill'],
+        'deadline' => date('Y-m-d', strtotime($date . ' -' . (int)$t['deadline_days'] . ' days')) . ' 20:00', 'info' => '', 'status' => 'draft',
+    ];
+}
+
+/** Wie viele Leiter braucht das Event? Fix gesetzt, sonst Anzahl Gruppen, sonst aus den Anmeldungen. null = noch offen. */
+function leaders_needed(array $ev): ?int
+{
+    if ($ev['leaders_needed'] !== null) {
+        return (int)$ev['leaders_needed'];
+    }
+    if ((int)$ev['group_count'] > 0) {
+        return (int)$ev['group_count'];
+    }
+    return (int)($ev['n_in'] ?? 0) > 0 ? suggested_group_count((int)$ev['n_in']) : null;
 }

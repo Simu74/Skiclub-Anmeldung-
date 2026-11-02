@@ -97,7 +97,7 @@ if (is_post()) {
                 $pdo->prepare('INSERT OR REPLACE INTO leader_availability (event_id, leader_id, status, note) VALUES (?, ?, ?, ?)')
                     ->execute([$id, $me['id'], $s, trim(mb_substr((string)($_POST['note'] ?? ''), 0, 200))]);
             }
-            flash($s === 'yes' ? 'Danke! Du bist als Gruppenleiter verfügbar.' : 'Gespeichert.');
+            flash($s === 'yes' ? 'Danke! Du bist im Leiterplan eingetragen.' : 'Gespeichert.');
             break;
         case 'feedback':
             $kind = array_key_exists($_POST['kind'] ?? '', FEEDBACK_KINDS) ? $_POST['kind'] : 'note';
@@ -223,15 +223,16 @@ layout_head($ev['title'], admin_nav(), 'index.php');
 
 <?php if ($ev['status'] !== 'cancelled'): ?>
 <form method="post" class="card stack"><?= csrf_field() ?><input type="hidden" name="action" value="availability"><input type="hidden" name="tab" value="<?= e($tab) ?>">
-  <div class="row between"><h3>Gruppe leiten?</h3>
+  <div class="row between"><h3>Leiterplan</h3>
     <?php if ($mine): ?><span class="pill <?= $mine['status'] === 'yes' ? 'open' : 'cancelled' ?>"><?= $mine['status'] === 'yes' ? 'Ich bin dabei' : 'Ich kann nicht' ?></span><?php endif ?></div>
   <?php if ($myGroups): ?><p>Du leitest <b>Gruppe <?= implode(', ', $myGroups) ?></b>.</p><?php endif ?>
   <label for="avnote" class="note">Bemerkung (freiwillig)</label>
   <input type="text" id="avnote" name="note" value="<?= e($mine['note'] ?? '') ?>" maxlength="200" placeholder="z.B. erst ab 14:30">
   <div class="row">
-    <button class="btn small" name="status" value="yes">Ich kann eine Gruppe leiten</button>
+    <button class="btn small" name="status" value="yes">Ich leite</button>
     <button class="btn ghost small" name="status" value="no">Ich kann nicht</button>
   </div>
+  <p class="note"><a href="plan.php#e<?= (int)$ev['id'] ?>">Ganze Saison im Leiterplan ansehen</a></p>
 </form>
 <?php endif ?>
 
@@ -306,9 +307,9 @@ layout_head($ev['title'], admin_nav(), 'index.php');
       <button class="btn small"><?= $groups ? 'Neu einteilen' : 'Automatisch einteilen' ?></button></div>
     <?php if ($groups): ?><p class="note">Achtung: «Neu einteilen» überschreibt Ihre Verschiebungen.</p><?php endif ?>
   </form>
-  <div class="card"><h3>Leiter-Rückmeldungen</h3>
-    <?php foreach ($availability as $av): ?><p><?= $av['status'] === 'yes' ? '✓' : '✗' ?> <b><?= e($av['name']) ?></b> <span class="note"><?= $av['status'] === 'yes' ? 'kann leiten' : 'kann nicht' ?><?= $av['note'] !== '' ? ' · ' . e($av['note']) : '' ?></span></p><?php endforeach ?>
-    <?php if (!$availability): ?><p class="note">Noch keine Leiter haben sich gemeldet.</p><?php endif ?>
+  <div class="card"><div class="row between"><h3>Leiterplan</h3><a class="note" href="plan.php#e<?= (int)$ev['id'] ?>">ergänzen</a></div>
+    <?php foreach ($availability as $av): ?><p><?= $av['status'] === 'yes' ? '✓' : '✗' ?> <b><?= e($av['name']) ?></b> <span class="note"><?= $av['status'] === 'yes' ? 'eingetragen' : 'kann nicht' ?><?= $av['note'] !== '' ? ' · ' . e($av['note']) : '' ?></span></p><?php endforeach ?>
+    <?php if (!$availability): ?><p class="note">Noch niemand im Leiterplan eingetragen.</p><?php endif ?>
   </div>
   <?php elseif (!$groups): ?>
   <div class="card"><p>Die Gruppen sind noch nicht eingeteilt.</p></div>

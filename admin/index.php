@@ -25,8 +25,7 @@ $templates = $isHead ? $pdo->query('SELECT id, name FROM event_templates ORDER B
 
 layout_head('Events', admin_nav(), 'index.php');
 ?>
-<div class="row between"><div><p class="eyebrow"><?= ROLES[$me['role']] ?> · <?= e($me['name']) ?></p><h1>Events</h1></div>
-  <a class="note" href="logout.php">Abmelden</a></div>
+<div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1>Events</h1></div>
 
 <?php if ($isHead): ?>
 <div class="card">
@@ -38,7 +37,7 @@ layout_head('Events', admin_nav(), 'index.php');
   <p class="note">Neue Events sind zuerst ein Entwurf. Eltern sehen sie erst nach dem Freischalten. <a href="templates.php">Vorlagen bearbeiten</a></p>
 </div>
 <?php else: ?>
-<p class="note">Melde dich bei den Events, ob du eine Gruppe leiten kannst. Vor Ort erfasst du die Präsenz und Rückmeldungen zu den Kindern.</p>
+<p class="note">Trag dich im <a href="plan.php">Leiterplan</a> für die Trainings ein, an denen du leitest. Vor Ort erfasst du die Präsenz und Rückmeldungen zu den Kindern.</p>
 <?php endif ?>
 
 <?php foreach ($events as $ev): ?>
@@ -53,8 +52,8 @@ layout_head('Events', admin_nav(), 'index.php');
     <div><div class="count"><?= (int)$ev['n_leaders'] ?></div><div class="note">Leiter dabei</div></div>
   </div>
   <?php if ($ev['my_groups']): ?><p>Du leitest <b>Gruppe <?= e(str_replace(',', ', ', $ev['my_groups'])) ?></b>.</p>
-  <?php elseif ($ev['my_status'] === 'yes'): ?><p class="note">Du hast dich als Leiter gemeldet.</p>
-  <?php elseif ($ev['my_status'] === null && $ev['status'] === 'open'): ?><p class="note">Du hast dich noch nicht gemeldet.</p><?php endif ?>
+  <?php elseif ($ev['my_status'] === 'yes'): ?><p class="note">Du bist im Leiterplan eingetragen.</p>
+  <?php elseif ($ev['my_status'] === null && $ev['status'] === 'open'): ?><p class="note">Du hast dich im <a href="plan.php#e<?= (int)$ev['id'] ?>">Leiterplan</a> noch nicht eingetragen.</p><?php endif ?>
   <a class="btn ghost small" href="event.php?id=<?= (int)$ev['id'] ?>">Öffnen</a>
 </article>
 <?php endforeach ?>
