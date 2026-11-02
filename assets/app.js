@@ -57,18 +57,19 @@
   }
 
   // Drucken
+  // Als App vom Home-Bildschirm oder im Browser von WhatsApp, Instagram usw. gibt es
+  // kein Druckfenster. Dann statt des Knopfs einen Hinweis zeigen.
+  var noPrint = typeof window.print !== 'function' ||
+    window.navigator.standalone === true ||
+    (window.matchMedia && (window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches)) ||
+    /WhatsApp|FBAN|FBAV|Instagram|Line\/|Snapchat|; wv\)/i.test(navigator.userAgent);
   document.querySelectorAll('[data-print]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      // Als App vom Home-Bildschirm (iPhone/Android) gibt es kein Druckfenster:
-      // dann die Seite im normalen Browser öffnen, dort klappt das Drucken.
-      var app = window.navigator.standalone === true ||
-        (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-      if (app || typeof window.print !== 'function') {
-        window.open(location.href, '_blank');
-        return;
-      }
-      window.print();
-    });
+    if (noPrint) { b.hidden = true; return; }
+    b.addEventListener('click', function () { window.print(); });
+  });
+  document.querySelectorAll('[data-print-info]').forEach(function (el) {
+    el.hidden = !noPrint;
   });
 
   // Meldung ausblenden

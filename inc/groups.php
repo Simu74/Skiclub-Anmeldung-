@@ -62,7 +62,7 @@ function regroup_event(int $eventId, int $n): void
     $taken->execute([$eventId]);
     $byGroup = array_column($taken->fetchAll(), 'leader_id', 'group_no');
     $st = $pdo->prepare("SELECT a.leader_id FROM leader_availability a JOIN leaders l ON l.id = a.leader_id
-        WHERE a.event_id = ? AND a.status = 'yes' ORDER BY l.name");
+        WHERE a.event_id = ? AND a.status = 'yes' AND l.role <> 'admin' ORDER BY l.name");
     $st->execute([$eventId]);
     $free = array_values(array_diff(array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN)), array_map('intval', $byGroup)));
     $set = $pdo->prepare('INSERT OR REPLACE INTO group_leaders (event_id, group_no, leader_id) VALUES (?, ?, ?)');

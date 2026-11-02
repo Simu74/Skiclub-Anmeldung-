@@ -7,6 +7,7 @@ require dirname(__DIR__) . '/inc/bootstrap.php';
 
 $me = require_leader();
 $isHead = has_role($me, 'hauptleiter');
+$leads = leads($me);
 $pdo = db();
 $showPast = !empty($_GET['alle']);
 $back = 'plan.php' . ($showPast ? '?alle=1' : '');
@@ -28,7 +29,9 @@ if (is_post()) {
     $a = $_POST['action'] ?? '';
     $eid = (int)($_POST['event_id'] ?? 0);
     $anchor = $eid ? '#e' . $eid : '';
-    if ($a === 'me') {
+    if ($a === 'me' && !$leads) {
+        flash('Admins erscheinen nicht im Leiterplan.');
+    } elseif ($a === 'me') {
         set_plan($eid, (int)$me['id'], (string)($_POST['status'] ?? ''));
         flash(($_POST['status'] ?? '') === 'yes' ? 'Eingetragen. Danke!' : 'Gespeichert.');
     } elseif (!$isHead) {
@@ -80,10 +83,10 @@ if (isset($_GET['export']) || isset($_GET['druck'])) {
     $st->execute([($season - 1) . '-07-01', $season . '-06-30']);
     $sEvents = $st->fetchAll();
     $sPlan = [];
-    foreach ($pdo->query('SELECT a.event_id, a.leader_id, a.status, a.note FROM leader_availability a') as $r) $sPlan[$r['event_id']][$r['leader_id']] = $r;
+    foreach ($pdo->query("SELECT a.event_id, a.leader_id, a.status, a.note FROM leader_availability a JOIN leaders l ON l.id = a.leader_id WHERE l.role <> 'admin'") as $r) $sPlan[$r['event_id']][$r['leader_id']] = $r;
     $sGroups = [];
     foreach ($pdo->query('SELECT event_id, leader_id, group_no FROM group_leaders') as $r) $sGroups[$r['event_id']][$r['leader_id']][] = $r['group_no'];
-    $team = $pdo->query('SELECT id, name FROM leaders ORDER BY name')->fetchAll();
+    $team = $pdo->query("SELECT id, name FROM leaders WHERE role <> 'admin' ORDER BY name")->fetchAll();
     $label = ($season - 1) . '/' . substr((string)$season, 2);
 
     if (isset($_GET['export'])) {
@@ -104,17 +107,21 @@ if (isset($_GET['export']) || isset($_GET['druck'])) {
     }
 
     // Druckansicht: «mein» = persönlicher Plan, «alle» = Gesamtplan
-    $all = ($_GET['druck'] ?? '') === 'alle';
+    $all = ($_GET['druck'] ?? '') === 'alle' || !$leads;
     $onlyMine = !$all && !empty($_GET['nur']);
     layout_head('Leiterplan drucken', admin_nav(), 'plan.php');
     ?>
     <div class="noprint row between"><a class="note" href="plan.php">← Zurück zum Leiterplan</a>
       <button type="button" class="btn small" data-print>Drucken / als PDF speichern</button></div>
-    <p class="noprint note">Öffnet sich kein Druckfenster? Die Seite im Browser öffnen (nicht aus WhatsApp oder vom Home-Bildschirm) und dort im Menü <b>Teilen → Drucken</b> (iPhone) oder <b>⋮ → Teilen → Drucken</b> (Android) wählen. Dort lässt sich der Plan auch als PDF sichern.</p>
+    <div class="noprint card stack" data-print-info hidden>
+      <p><b>Drucken geht hier nicht.</b> In der App vom Home-Bildschirm und im Browser von WhatsApp gibt es kein Druckfenster.</p>
+      <p class="note">So geht es: diese Seite in Safari oder Chrome öffnen (Adresse unten kopieren) und dort <b>Teilen → Drucken</b> wählen. Dort lässt sich der Plan auch als PDF sichern.</p>
+      <input type="text" readonly value="<?= e(base_url() . '/admin/plan.php?' . http_build_query(['druck' => $_GET['druck'] ?? 'mein'] + (empty($_GET['nur']) ? [] : ['nur' => 1]))) ?>" aria-label="Adresse dieser Seite" onclick="this.select()">
+    </div>
     <div class="noprint seg">
-      <a class="segbtn" href="?druck=mein" <?= !$all && !$onlyMine ? 'aria-current="page"' : '' ?>>Mein Plan (alle Termine)</a>
+      <?php if ($leads): ?><a class="segbtn" href="?druck=mein" <?= !$all && !$onlyMine ? 'aria-current="page"' : '' ?>>Mein Plan (alle Termine)</a>
       <a class="segbtn" href="?druck=mein&nur=1" <?= $onlyMine ? 'aria-current="page"' : '' ?>>Nur meine Einsätze</a>
-      <a class="segbtn" href="?druck=alle" <?= $all ? 'aria-current="page"' : '' ?>>Gesamtplan alle Leiter</a>
+      <a class="segbtn" href="?druck=alle" <?= $all ? 'aria-current="page"' : '' ?>>Gesamtplan alle Leiter</a><?php endif ?>
     </div>
     <div><p class="eyebrow"><?= e($config['site_name']) ?> · Saison <?= e($label) ?></p>
       <h1><?= $all ? 'Leiterplan' : 'Mein Leiterplan: ' . e($me['name']) ?></h1>
@@ -160,11 +167,11 @@ $plan = [];   // event_id => leader_id => row
 if ($events) {
     $ids = implode(',', array_map('intval', array_column($events, 'id')));
     foreach ($pdo->query("SELECT a.*, l.name FROM leader_availability a JOIN leaders l ON l.id = a.leader_id
-        WHERE a.event_id IN ($ids) ORDER BY l.name") as $r) {
+        WHERE a.event_id IN ($ids) AND l.role <> 'admin' ORDER BY l.name") as $r) {
         $plan[$r['event_id']][$r['leader_id']] = $r;
     }
 }
-$leaders = $pdo->query('SELECT id, name, phone FROM leaders ORDER BY name')->fetchAll();
+$leaders = $pdo->query("SELECT id, name, phone FROM leaders WHERE role <> 'admin' ORDER BY name")->fetchAll();
 $templates = $isHead ? $pdo->query('SELECT id, name FROM event_templates ORDER BY sort, name')->fetchAll() : [];
 
 // Übersicht: wo fehlen Leiter? / Wo bin ich eingetragen?
@@ -184,7 +191,7 @@ layout_head('Leiterplan', admin_nav(), 'plan.php');
 <div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1>Leiterplan</h1></div>
 
 <div class="row">
-  <a class="btn ghost small" href="?druck=mein">Meinen Plan drucken</a>
+  <a class="btn ghost small" href="?druck=<?= $leads ? 'mein' : 'alle' ?>"><?= $leads ? 'Meinen Plan drucken' : 'Plan drucken' ?></a>
   <?php if ($isHead): ?><a class="btn ghost small" href="?export=1">Export Excel</a><a class="btn ghost small" href="import.php?art=plan">Import Excel</a><?php endif ?>
 </div>
 
@@ -244,10 +251,10 @@ foreach ($events as $ev):
     <?php if ($need === null): ?> · Bedarf offen<?php elseif ($state === 'short'): ?> · <b class="warnline"><?= $need - count($yes) ?> fehlen</b><?php endif ?>
     <?php if ($ev['n_in']): ?> · <?= (int)$ev['n_in'] ?> Kinder<?php endif ?>
   </p>
-  <form method="post" class="toggle"><?= csrf_field() ?><input type="hidden" name="action" value="me"><input type="hidden" name="event_id" value="<?= (int)$ev['id'] ?>">
+  <?php if ($leads): ?><form method="post" class="toggle"><?= csrf_field() ?><input type="hidden" name="action" value="me"><input type="hidden" name="event_id" value="<?= (int)$ev['id'] ?>">
     <button class="tbtn yes" name="status" value="<?= $my === 'yes' ? 'clear' : 'yes' ?>" aria-pressed="<?= $my === 'yes' ? 'true' : 'false' ?>">✓ Ich leite</button>
     <button class="tbtn no" name="status" value="<?= $my === 'no' ? 'clear' : 'no' ?>" aria-pressed="<?= $my === 'no' ? 'true' : 'false' ?>">✗ Kann nicht</button>
-  </form>
+  </form><?php endif ?>
   <?php if ($isHead): ?>
   <details><summary class="note">Leiter ergänzen / streichen, Bedarf<?= $no ? ' · ' . count($no) . ' kann nicht' : '' ?></summary>
     <div class="stack">

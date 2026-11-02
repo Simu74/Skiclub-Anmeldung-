@@ -101,6 +101,12 @@ function has_role(?array $leader, string $role): bool
     return $leader !== null && (ROLE_RANK[$leader['role']] ?? 0) >= ROLE_RANK[$role];
 }
 
+/** Leitet selber Trainings? Admins verwalten nur und erscheinen nicht als Leiter. */
+function leads(?array $leader): bool
+{
+    return $leader !== null && ($leader['role'] ?? '') !== 'admin';
+}
+
 function require_leader(string $role = 'leiter'): array
 {
     $l = current_leader();
