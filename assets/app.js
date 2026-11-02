@@ -45,3 +45,35 @@
   var toast = document.querySelector('.toast');
   if (toast) setTimeout(function () { toast.classList.add('hide'); }, 2600);
 })();
+
+// Formatierungsknöpfe für Freitext (*fett*, _kursiv_, Aufzählung)
+(function () {
+  document.querySelectorAll('[data-format-for]').forEach(function (bar) {
+    var ta = document.getElementById(bar.dataset.formatFor);
+    if (!ta) return;
+    bar.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button');
+      if (!b) return;
+      var s = ta.selectionStart, en = ta.selectionEnd, v = ta.value, sel = v.slice(s, en);
+      if (b.dataset.wrap) {
+        var w = b.dataset.wrap, txt = sel || 'Text';
+        ta.value = v.slice(0, s) + w + txt + w + v.slice(en);
+        ta.setSelectionRange(s + 1, s + 1 + txt.length);
+      } else if (b.hasAttribute('data-list')) {
+        var start = v.lastIndexOf('\n', s - 1) + 1;
+        var block = v.slice(start, en) || '';
+        var lines = block.split('\n').map(function (l) { return /^\s*[-•]\s/.test(l) ? l : '- ' + l; });
+        ta.value = v.slice(0, start) + lines.join('\n') + v.slice(en);
+      }
+      ta.focus();
+    });
+  });
+
+  // Rückmeldung: Stufen-Auswahl nur bei Art «Stufe»
+  document.querySelectorAll('select[data-show-skill]').forEach(function (s) {
+    var box = document.getElementById(s.dataset.showSkill);
+    var upd = function () { if (box) box.hidden = s.value !== 'skill'; };
+    s.addEventListener('change', upd);
+    upd();
+  });
+})();

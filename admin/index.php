@@ -3,46 +3,61 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/inc/bootstrap.php';
 
 $me = require_leader();
+$isHead = has_role($me, 'hauptleiter');
 $pdo = db();
 
 $showPast = !empty($_GET['alle']);
+$where = [];
+if (!$showPast) $where[] = "e.date >= date('now', 'localtime')";
+if (!$isHead) $where[] = "e.status <> 'draft'";
 $sql = 'SELECT e.*,
     (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = \'in\') AS n_in,
     (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = \'out\') AS n_out,
-    (SELECT COALESCE(SUM(seats), 0) FROM drivers d WHERE d.event_id = e.id) AS seats
-  FROM events e ' . ($showPast ? '' : "WHERE e.date >= date('now', 'localtime') ") . 'ORDER BY e.date' . ($showPast ? ' DESC' : '');
-$events = $pdo->query($sql)->fetchAll();
+    (SELECT COALESCE(SUM(seats), 0) FROM drivers d WHERE d.event_id = e.id) AS seats,
+    (SELECT COUNT(*) FROM leader_availability a WHERE a.event_id = e.id AND a.status = \'yes\') AS n_leaders,
+    (SELECT status FROM leader_availability a WHERE a.event_id = e.id AND a.leader_id = :me) AS my_status,
+    (SELECT GROUP_CONCAT(group_no) FROM group_leaders g WHERE g.event_id = e.id AND g.leader_id = :me) AS my_groups
+  FROM events e ' . ($where ? 'WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY e.date' . ($showPast ? ' DESC' : '');
+$st = $pdo->prepare($sql);
+$st->execute(['me' => $me['id']]);
+$events = $st->fetchAll();
+$templates = $isHead ? $pdo->query('SELECT id, name FROM event_templates ORDER BY sort, name')->fetchAll() : [];
 
 layout_head('Events', admin_nav(), 'index.php');
 ?>
-<div class="row between"><div><p class="eyebrow">Leiter · <?= e($me['name']) ?></p><h1>Events</h1></div>
+<div class="row between"><div><p class="eyebrow"><?= ROLES[$me['role']] ?> · <?= e($me['name']) ?></p><h1>Events</h1></div>
   <a class="note" href="logout.php">Abmelden</a></div>
 
+<?php if ($isHead): ?>
 <div class="card">
   <h3>Neues Event aus Vorlage</h3>
   <div class="seg">
-    <a class="segbtn" href="event_edit.php?vorlage=off">Off Snow Samstag</a>
-    <a class="segbtn" href="event_edit.php?vorlage=on_sa">On Snow Samstag</a>
-    <a class="segbtn" href="event_edit.php?vorlage=on_mi">On Snow Mittwoch</a>
-    <a class="segbtn" href="event_edit.php?vorlage=race">Rennen</a>
+    <?php foreach ($templates as $t): ?><a class="segbtn" href="event_edit.php?vorlage=<?= (int)$t['id'] ?>"><?= e($t['name']) ?></a><?php endforeach ?>
+    <a class="segbtn" href="event_edit.php">Leer</a>
   </div>
-  <p class="note">Neue Events sind zuerst ein Entwurf. Eltern sehen sie erst nach dem Freischalten.</p>
+  <p class="note">Neue Events sind zuerst ein Entwurf. Eltern sehen sie erst nach dem Freischalten. <a href="templates.php">Vorlagen bearbeiten</a></p>
 </div>
+<?php else: ?>
+<p class="note">Melde dich bei den Events, ob du eine Gruppe leiten kannst. Vor Ort erfasst du die Präsenz und Rückmeldungen zu den Kindern.</p>
+<?php endif ?>
 
 <?php foreach ($events as $ev): ?>
 <article class="card">
   <div class="row between"><span class="date"><?= fmt_date($ev['date']) ?><?= $ev['time_text'] !== '' ? ' · ' . e($ev['time_text']) : '' ?></span>
     <span class="pill <?= e($ev['status']) ?>"><?= EVENT_STATUS[$ev['status']] ?></span></div>
   <div class="row between"><h2><a href="event.php?id=<?= (int)$ev['id'] ?>"><?= e($ev['title']) ?></a></h2>
-    <span class="pill <?= e($ev['type']) ?>"><?= EVENT_TYPES[$ev['type']] ?></span></div>
+    <span class="pill <?= e($ev['type']) ?>"><?= e(category_name($ev)) ?></span></div>
   <div class="row stats">
     <div><div class="count"><?= (int)$ev['n_in'] ?></div><div class="note">angemeldet</div></div>
     <div><div class="count"><?= (int)$ev['n_out'] ?></div><div class="note">abgemeldet</div></div>
-    <div><div class="count"><?= (int)$ev['seats'] ?></div><div class="note">Fahrplätze</div></div>
+    <div><div class="count"><?= (int)$ev['n_leaders'] ?></div><div class="note">Leiter dabei</div></div>
   </div>
-  <a class="btn ghost small" href="event.php?id=<?= (int)$ev['id'] ?>">Öffnen: Anmeldungen, Gruppen, WhatsApp</a>
+  <?php if ($ev['my_groups']): ?><p>Du leitest <b>Gruppe <?= e(str_replace(',', ', ', $ev['my_groups'])) ?></b>.</p>
+  <?php elseif ($ev['my_status'] === 'yes'): ?><p class="note">Du hast dich als Leiter gemeldet.</p>
+  <?php elseif ($ev['my_status'] === null && $ev['status'] === 'open'): ?><p class="note">Du hast dich noch nicht gemeldet.</p><?php endif ?>
+  <a class="btn ghost small" href="event.php?id=<?= (int)$ev['id'] ?>">Öffnen</a>
 </article>
 <?php endforeach ?>
-<?php if (!$events): ?><div class="card"><p>Keine kommenden Events. Erstellen Sie oben eines aus einer Vorlage.</p></div><?php endif ?>
+<?php if (!$events): ?><div class="card"><p><?= $isHead ? 'Keine kommenden Events. Erstellen Sie oben eines aus einer Vorlage.' : 'Im Moment sind keine Events freigeschaltet.' ?></p></div><?php endif ?>
 <p class="note"><a href="?alle=<?= $showPast ? '0' : '1' ?>"><?= $showPast ? 'Nur kommende Events zeigen' : 'Auch vergangene Events zeigen' ?></a></p>
 <?php layout_foot();

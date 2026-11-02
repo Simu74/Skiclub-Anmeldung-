@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require dirname(__DIR__) . '/inc/bootstrap.php';
 
-require_leader();
+require_leader('hauptleiter');
 $pdo = db();
 
 if (is_post()) {
@@ -47,6 +47,19 @@ if (is_post()) {
             $pdo->prepare('UPDATE kids SET skill = ? WHERE id = ?')->execute([max(1, min(5, (int)$_POST['skill'])), (int)$_POST['kid_id']]);
             flash('Stufe gespeichert.');
             break;
+        case 'apply_skill':
+            $st = $pdo->prepare("SELECT * FROM kid_feedback WHERE id = ? AND kind = 'skill'");
+            $st->execute([(int)$_POST['feedback_id']]);
+            if ($fb = $st->fetch()) {
+                $pdo->prepare('UPDATE kids SET skill = ? WHERE id = ?')->execute([$fb['skill'], $fb['kid_id']]);
+                $pdo->prepare('UPDATE kid_feedback SET done = 1 WHERE id = ?')->execute([$fb['id']]);
+                flash('Stufe übernommen.');
+            }
+            redirect('families.php');
+        case 'feedback_done':
+            $pdo->prepare('UPDATE kid_feedback SET done = 1 WHERE id = ?')->execute([(int)$_POST['feedback_id']]);
+            flash('Als erledigt markiert.');
+            redirect('families.php');
         case 'new_link':
             $pdo->prepare('UPDATE families SET token = ? WHERE id = ?')->execute([bin2hex(random_bytes(16)), $fid]);
             flash('Neuer Link erstellt. Der alte funktioniert nicht mehr.');
@@ -69,11 +82,37 @@ foreach ($pdo->query('SELECT * FROM kids ORDER BY birth_year') as $k) {
     $kidsBy[$k['family_id']][] = $k;
 }
 $nKids = (int)$pdo->query('SELECT COUNT(*) FROM kids WHERE active = 1')->fetchColumn();
+$openFeedback = $pdo->query('SELECT fb.*, k.first_name, k.skill AS current_skill, f.name AS family_name, f.id AS family_id, l.name AS leader_name, e.title, e.date
+    FROM kid_feedback fb JOIN kids k ON k.id = fb.kid_id JOIN families f ON f.id = k.family_id
+    LEFT JOIN leaders l ON l.id = fb.leader_id LEFT JOIN events e ON e.id = fb.event_id
+    WHERE fb.done = 0 ORDER BY fb.id DESC')->fetchAll();
+$recentByKid = [];
+foreach ($pdo->query("SELECT fb.kid_id, fb.kind, fb.skill, fb.text, fb.created_at FROM kid_feedback fb ORDER BY fb.id DESC") as $fb) {
+    if (count($recentByKid[$fb['kid_id']] ?? []) < 3) $recentByKid[$fb['kid_id']][] = $fb;
+}
 
 layout_head('Familien', admin_nav(), 'families.php');
 ?>
 <div><p class="eyebrow">Leiter</p><h1>Familien &amp; Kinder</h1>
   <p class="note"><?= count($families) ?> Familien, <?= $nKids ?> aktive Kinder. Jede Familie bekommt einen persönlichen Link, kein Passwort.</p></div>
+
+<?php if ($openFeedback): ?>
+<div class="card">
+  <h3>Offene Rückmeldungen der Leiter (<?= count($openFeedback) ?>)</h3>
+  <?php foreach ($openFeedback as $fb): ?>
+    <div class="gkid"><span class="nm"><b><?= e($fb['first_name'] . ' ' . $fb['family_name']) ?></b>
+      <span class="pill <?= $fb['kind'] === 'injury' ? 'cancelled' : '' ?>"><?= FEEDBACK_KINDS[$fb['kind']] ?><?= $fb['skill'] ? ': ' . e(SKILLS[$fb['skill']]) . ' (bisher ' . e(SKILLS[$fb['current_skill']]) . ')' : '' ?></span><br>
+      <?= e($fb['text']) ?> <span class="note">– <?= e($fb['leader_name'] ?? '?') ?><?= $fb['title'] ? ', ' . e($fb['title']) . ' ' . fmt_date($fb['date']) : '' ?></span></span>
+      <span class="stack">
+      <?php if ($fb['kind'] === 'skill' && (int)$fb['skill'] !== (int)$fb['current_skill']): ?>
+        <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="apply_skill"><input type="hidden" name="feedback_id" value="<?= (int)$fb['id'] ?>"><button class="btn small">Stufe übernehmen</button></form>
+      <?php endif ?>
+        <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="feedback_done"><input type="hidden" name="feedback_id" value="<?= (int)$fb['id'] ?>"><button class="linkbtn">erledigt</button></form>
+      </span>
+    </div>
+  <?php endforeach ?>
+</div>
+<?php endif ?>
 
 <details class="card" <?= $families ? '' : 'open' ?>><summary class="btn small">+ Familie erfassen</summary>
   <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="add_family">
@@ -95,7 +134,8 @@ layout_head('Familien', admin_nav(), 'families.php');
       <input type="hidden" name="kid_id" value="<?= (int)$k['id'] ?>"><input type="hidden" name="family_id" value="<?= (int)$f['id'] ?>">
       <span class="piste p-<?= piste((int)$k['skill']) ?>"></span>
       <span class="nm"><b><?= e($k['first_name']) ?></b> <span class="note"><?= (int)$k['birth_year'] ?> · <?= race_category((int)$k['birth_year']) ?><?= $k['active'] ? '' : ' · inaktiv' ?></span>
-        <?php if ($k['health'] !== ''): ?><br><span class="health">⚕︎ <?= e($k['health']) ?></span><?php endif ?></span>
+        <?php if ($k['health'] !== ''): ?><br><span class="health">⚕︎ <?= e($k['health']) ?></span><?php endif ?>
+        <?php foreach ($recentByKid[$k['id']] ?? [] as $fb): ?><br><span class="note"><?= date('d.m.', strtotime($fb['created_at'])) ?> <?= FEEDBACK_KINDS[$fb['kind']] ?>: <?= $fb['skill'] ? e(SKILLS[$fb['skill']]) . ' ' : '' ?><?= e($fb['text']) ?></span><?php endforeach ?></span>
       <select name="skill" data-autosubmit aria-label="Stufe <?= e($k['first_name']) ?>">
         <?php foreach (SKILLS as $sv => $sl): ?><option value="<?= $sv ?>" <?= (int)$k['skill'] === $sv ? 'selected' : '' ?>><?= e($sl) ?></option><?php endforeach ?></select>
       <noscript><button class="btn ghost small">OK</button></noscript>

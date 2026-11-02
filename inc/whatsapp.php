@@ -28,6 +28,8 @@ function whatsapp_templates(array $ev, array $kidsIn, array $groups, array $driv
         ($ev['place'] !== '' ? "📍 {$ev['place']}\n" : '') .
         ($ev['material'] !== '' ? "🎒 {$ev['material']}\n" : '') .
         ($ev['min_skill'] > 1 ? "ℹ️ Für Kinder ab Stufe " . SKILLS[$ev['min_skill']] . "\n" : '') .
+        ($ev['details'] !== '' ? "\n{$ev['details']}\n" : '') .
+        (event_files((int)$ev['id']) ? "\n📎 Ausschreibung/Anhang in der App\n" : '') .
         "\nBitte bis *" . fmt_deadline($ev['deadline']) . "* anmelden, mit eurem persönlichen Link:\n$link"];
 
     $t['erinnerung'] = ['label' => 'Erinnerung', 'text' =>
@@ -41,7 +43,7 @@ function whatsapp_templates(array $ev, array $kidsIn, array $groups, array $driv
             $parts[] = "*Gruppe $no* (Leiter: $leader)\n" . implode("\n", array_map(fn($k) => '• ' . initial_name($k), $g['kids']));
         }
         if ($drivers) {
-            $parts[] = '🚗 Fahrer: ' . implode(', ', array_map(fn($d) => "Fam. {$d['name']} ({$d['seats']})", $drivers));
+            $parts[] = '🚗 Fahrer: ' . implode(', ', array_map(fn($d) => "Fam. {$d['name']} ({$d['seats']})" . ($d['note'] !== '' ? " – {$d['note']}" : ''), $drivers));
         }
         $t['gruppen'] = ['label' => 'Gruppenliste', 'text' => implode("\n\n", $parts)];
     }

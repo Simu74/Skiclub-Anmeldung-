@@ -127,3 +127,14 @@ textarea, select, input[type=text], input[type=tel], input[type=number], input[t
 .bar { display: block; width: 70px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .bar span { display: block; height: 100%; background: var(--accent); }
 .count.small { font-size: 22px; }
+
+/* Rollen, Freitext, Anhänge */
+.richtext { font-size: 15px; overflow-wrap: anywhere; }
+.richtext ul { margin: 4px 0; padding-left: 1.3em; }
+details.more summary { font-weight: 700; color: var(--accent); cursor: pointer; font-size: 15px; }
+a.file { display: inline-flex; gap: 6px; align-items: baseline; font-weight: 700; overflow-wrap: anywhere; }
+.toolbar { display: flex; gap: 6px; }
+.toolbar button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-size: 15px; }
+.tabs a { font-size: 14px; padding: 12px 2px; }
+input[type=file] { font-size: 14px; max-width: 100%; }
+details > summary.row { list-style: none; }
