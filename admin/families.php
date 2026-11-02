@@ -76,6 +76,17 @@ if (is_post()) {
     redirect('families.php#f' . $fid);
 }
 
+if (isset($_GET['export'])) {
+    require dirname(__DIR__) . '/inc/xlsx.php';
+    $rows = [['Familie', 'Telefon Eltern', 'Vorname', 'Jahrgang', 'Stufe', 'Notfallnummer', 'Hinweise', 'Aktiv']];
+    foreach ($pdo->query('SELECT f.name, f.phone, k.first_name, k.birth_year, k.skill, k.emergency_phone, k.health, k.active
+        FROM families f LEFT JOIN kids k ON k.family_id = f.id ORDER BY f.name, k.birth_year') as $r) {
+        $rows[] = [$r['name'], $r['phone'], (string)$r['first_name'], $r['birth_year'] !== null ? (int)$r['birth_year'] : '',
+            $r['skill'] !== null ? SKILLS[(int)$r['skill']] : '', (string)$r['emergency_phone'], (string)$r['health'], $r['first_name'] === null ? '' : ($r['active'] ? 'ja' : 'nein')];
+    }
+    xlsx_download('familien-' . date('Y-m-d') . '.xlsx', 'Familien', $rows, [18, 16, 14, 10, 11, 16, 30, 7]);
+}
+
 $families = $pdo->query('SELECT * FROM families ORDER BY name')->fetchAll();
 $kidsBy = [];
 foreach ($pdo->query('SELECT * FROM kids ORDER BY birth_year') as $k) {
@@ -93,7 +104,7 @@ foreach ($pdo->query("SELECT fb.kid_id, fb.kind, fb.skill, fb.text, fb.created_a
 
 layout_head('Familien', admin_nav(), 'families.php');
 ?>
-<div><p class="eyebrow">Leiter</p><h1>Familien &amp; Kinder</h1>
+<div><p class="eyebrow">Hauptleiter</p><h1>Familien &amp; Kinder</h1>
   <p class="note"><?= count($families) ?> Familien, <?= $nKids ?> aktive Kinder. Jede Familie bekommt einen persönlichen Link, kein Passwort.</p></div>
 
 <?php if ($openFeedback): ?>
@@ -126,10 +137,26 @@ layout_head('Familien', admin_nav(), 'families.php');
 
 <p class="note">Stufen: <span class="piste p-blue"></span> Blau 1–2 · <span class="piste p-red"></span> Rot 3–4 · <span class="piste p-black"></span> Schwarz 5. Nach Stufe werden die Gruppen eingeteilt.</p>
 
-<?php foreach ($families as $f): $link = family_link($f); ?>
-<article class="card" id="f<?= (int)$f['id'] ?>">
-  <div class="row between"><h2>Familie <?= e($f['name']) ?></h2><span class="note"><?= e($f['phone']) ?></span></div>
-  <?php foreach ($kidsBy[$f['id']] ?? [] as $k): ?>
+<div class="card stack">
+  <input type="search" id="famfilter" placeholder="Familie oder Kind suchen …" aria-label="Familie oder Kind suchen" data-filter=".fam">
+  <div class="row">
+    <a class="btn ghost small" href="families.php?export=1">Export Excel</a>
+    <a class="btn ghost small" href="import.php?art=familien">Import Excel</a>
+  </div>
+</div>
+
+<div class="famlist">
+<?php foreach ($families as $f): $link = family_link($f); $kids = $kidsBy[$f['id']] ?? [];
+    $hasFeedback = array_filter($kids, fn($k) => !empty($recentByKid[$k['id']])); ?>
+<details class="fam" id="f<?= (int)$f['id'] ?>" data-search="<?= e(mb_strtolower($f['name'] . ' ' . implode(' ', array_column($kids, 'first_name')))) ?>">
+  <summary>
+    <span class="famname"><b><?= e($f['name']) ?></b>
+      <span class="note"><?= e(implode(', ', array_map(fn($k) => $k['first_name'] . ($k['active'] ? '' : ' (inaktiv)'), $kids)) ?: 'keine Kinder') ?></span></span>
+    <span class="dots"><?php foreach ($kids as $k): if (!$k['active']) continue; ?><span class="piste p-<?= piste((int)$k['skill']) ?>" title="<?= e($k['first_name'] . ': ' . SKILLS[$k['skill']]) ?>"></span><?php endforeach ?></span>
+  </summary>
+  <div class="fambody stack">
+  <?php if ($f['phone'] !== ''): ?><p class="note">Handy Eltern: <?= e($f['phone']) ?></p><?php endif ?>
+  <?php foreach ($kids as $k): ?>
     <form method="post" class="gkid<?= $k['active'] ? '' : ' inactive' ?>"><?= csrf_field() ?><input type="hidden" name="action" value="skill">
       <input type="hidden" name="kid_id" value="<?= (int)$k['id'] ?>"><input type="hidden" name="family_id" value="<?= (int)$f['id'] ?>">
       <span class="piste p-<?= piste((int)$k['skill']) ?>"></span>
@@ -180,6 +207,8 @@ layout_head('Familien', admin_nav(), 'families.php');
         <button class="btn red small">Löschen</button></form>
     </div>
   </details>
-</article>
+  </div>
+</details>
 <?php endforeach ?>
+</div>
 <?php layout_foot();
