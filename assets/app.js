@@ -17,8 +17,8 @@
   document.querySelectorAll('button[data-count-label]').forEach(function (b) {
     var form = b.form;
     function upd() {
-      var n = form.querySelectorAll('input[name="kids[]"]:checked').length;
-      b.textContent = n ? b.dataset.countLabel + ' (' + n + (n === 1 ? ' Kind)' : ' Kinder)') : 'Niemand kommt: speichern';
+      var n = form.querySelectorAll('input[name="' + (b.dataset.countName || 'kids[]') + '"]:checked').length;
+      b.textContent = n ? b.dataset.countLabel + ' (' + n + (n === 1 ? ' Kind)' : ' Kinder)') : (b.dataset.countEmpty || 'Niemand kommt: speichern');
     }
     form.addEventListener('change', upd);
     upd();
@@ -53,7 +53,11 @@
   // Aufklapp-Eintrag aus dem Link (#f12) öffnen, z.B. nach dem Speichern
   if (location.hash) {
     var t = document.getElementById(location.hash.slice(1));
-    if (t && t.tagName === 'DETAILS') { t.open = true; t.scrollIntoView({ block: 'start' }); }
+    if (t) {
+      // Ziel und alle umgebenden Aufklapp-Bereiche öffnen
+      for (var d = t; d; d = d.parentElement) { if (d.tagName === 'DETAILS') d.open = true; }
+      t.scrollIntoView({ block: 'start' });
+    }
   }
 
   // Drucken

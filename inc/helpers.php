@@ -101,10 +101,18 @@ function has_role(?array $leader, string $role): bool
     return $leader !== null && (ROLE_RANK[$leader['role']] ?? 0) >= ROLE_RANK[$role];
 }
 
-/** Leitet selber Trainings? Admins verwalten nur und erscheinen nicht als Leiter. */
+/** Montag und Sonntag der Woche, in der $date liegt (Y-m-d). */
+function week_of(string $date): array
+{
+    $t = strtotime($date);
+    $mon = strtotime('-' . ((int)date('N', $t) - 1) . ' days', $t);
+    return [date('Y-m-d', $mon), date('Y-m-d', strtotime('+6 days', $mon))];
+}
+
+/** Leitet selber Trainings? Nur die Rolle «Leiter». Hauptleiter und Admins planen, erscheinen aber nicht als Leiter. */
 function leads(?array $leader): bool
 {
-    return $leader !== null && ($leader['role'] ?? '') !== 'admin';
+    return $leader !== null && ($leader['role'] ?? '') === 'leiter';
 }
 
 function require_leader(string $role = 'leiter'): array
@@ -285,7 +293,7 @@ function admin_nav(): array
         $nav['families.php'] = 'Familien';
         $nav['templates.php'] = 'Vorlagen';
     }
-    $nav['leaders.php'] = 'Team';
+    $nav['leaders.php'] = has_role($me, 'hauptleiter') ? 'Team' : 'Einstellungen';
     if (has_role($me, 'admin')) {
         $nav['stats.php'] = 'Statistik';
     }

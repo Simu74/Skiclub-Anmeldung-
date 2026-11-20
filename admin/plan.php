@@ -83,10 +83,10 @@ if (isset($_GET['export']) || isset($_GET['druck'])) {
     $st->execute([($season - 1) . '-07-01', $season . '-06-30']);
     $sEvents = $st->fetchAll();
     $sPlan = [];
-    foreach ($pdo->query("SELECT a.event_id, a.leader_id, a.status, a.note FROM leader_availability a JOIN leaders l ON l.id = a.leader_id WHERE l.role <> 'admin'") as $r) $sPlan[$r['event_id']][$r['leader_id']] = $r;
+    foreach ($pdo->query("SELECT a.event_id, a.leader_id, a.status, a.note FROM leader_availability a JOIN leaders l ON l.id = a.leader_id WHERE l.role = 'leiter'") as $r) $sPlan[$r['event_id']][$r['leader_id']] = $r;
     $sGroups = [];
     foreach ($pdo->query('SELECT event_id, leader_id, group_no FROM group_leaders') as $r) $sGroups[$r['event_id']][$r['leader_id']][] = $r['group_no'];
-    $team = $pdo->query("SELECT id, name FROM leaders WHERE role <> 'admin' ORDER BY name")->fetchAll();
+    $team = $pdo->query("SELECT id, name FROM leaders WHERE role = 'leiter' ORDER BY name")->fetchAll();
     $label = ($season - 1) . '/' . substr((string)$season, 2);
 
     if (isset($_GET['export'])) {
@@ -106,26 +106,24 @@ if (isset($_GET['export']) || isset($_GET['druck'])) {
             array_merge([6, 11, 12, 26, 12, 13, 8], array_fill(0, count($team), 10), [11]));
     }
 
-    // Druckansicht: «mein» = persönlicher Plan, «alle» = Gesamtplan
-    $all = ($_GET['druck'] ?? '') === 'alle' || !$leads;
-    $onlyMine = !$all && !empty($_GET['nur']);
-    layout_head('Leiterplan drucken', admin_nav(), 'plan.php');
+    // Druckansicht: «mein» = meine Einsätze, «termine» = alle Termine mit meiner Wahl, «alle» = Gesamtplan
+    $view = (string)($_GET['druck'] ?? 'mein');
+    if (!$leads || !in_array($view, ['mein', 'termine', 'alle'], true)) $view = $leads ? 'mein' : 'alle';
+    $all = $view === 'alle';
+    $onlyMine = $view === 'mein';
+    $title = $all ? 'Leiterplan' : ($onlyMine ? 'Meine Einsätze: ' : 'Alle Termine: ') . $me['name'];
+    layout_head('Leiterplan drucken', admin_nav(), $leads ? 'leaders.php' : 'plan.php');
     ?>
-    <div class="noprint row between"><a class="note" href="plan.php">← Zurück zum Leiterplan</a>
-      <button type="button" class="btn small" data-print>Drucken / als PDF speichern</button></div>
-    <div class="noprint card stack" data-print-info hidden>
-      <p><b>Drucken geht hier nicht.</b> In der App vom Home-Bildschirm und im Browser von WhatsApp gibt es kein Druckfenster.</p>
-      <p class="note">So geht es: diese Seite in Safari oder Chrome öffnen (Adresse unten kopieren) und dort <b>Teilen → Drucken</b> wählen. Dort lässt sich der Plan auch als PDF sichern.</p>
-      <input type="text" readonly value="<?= e(base_url() . '/admin/plan.php?' . http_build_query(['druck' => $_GET['druck'] ?? 'mein'] + (empty($_GET['nur']) ? [] : ['nur' => 1]))) ?>" aria-label="Adresse dieser Seite" onclick="this.select()">
-    </div>
-    <div class="noprint seg">
-      <?php if ($leads): ?><a class="segbtn" href="?druck=mein" <?= !$all && !$onlyMine ? 'aria-current="page"' : '' ?>>Mein Plan (alle Termine)</a>
-      <a class="segbtn" href="?druck=mein&nur=1" <?= $onlyMine ? 'aria-current="page"' : '' ?>>Nur meine Einsätze</a>
-      <a class="segbtn" href="?druck=alle" <?= $all ? 'aria-current="page"' : '' ?>>Gesamtplan alle Leiter</a><?php endif ?>
-    </div>
     <div><p class="eyebrow"><?= e($config['site_name']) ?> · Saison <?= e($label) ?></p>
-      <h1><?= $all ? 'Leiterplan' : 'Mein Leiterplan: ' . e($me['name']) ?></h1>
-      <p class="note">Stand <?= date('d.m.Y') ?>. <?= $all ? 'x = leitet, – = kann nicht.' : 'Grün = du leitest.' ?> Änderungen bitte im Leiterplan der App eintragen.</p></div>
+      <h1><?= e($title) ?></h1>
+      <p class="note">Stand <?= date('d.m.Y') ?>.<?= $all ? ' x = leitet, – = kann nicht.' : ($onlyMine ? '' : ' Grün = du leitest.') ?> Änderungen bitte im Leiterplan der App eintragen.</p></div>
+    <?php if ($leads): ?>
+    <div class="noprint seg">
+      <a class="segbtn" href="?druck=mein" <?= $onlyMine ? 'aria-current="page"' : '' ?>>Meine Einsätze</a>
+      <a class="segbtn" href="?druck=termine" <?= $view === 'termine' ? 'aria-current="page"' : '' ?>>Alle Termine</a>
+      <a class="segbtn" href="?druck=alle" <?= $all ? 'aria-current="page"' : '' ?>>Gesamtplan alle Leiter</a>
+    </div>
+    <?php endif ?>
     <?php if ($all): ?>
     <div class="tscroll"><table class="plan-table"><thead><tr><th>Datum</th><th>Event</th><?php foreach ($team as $l): ?><th class="c"><?= e($l['name']) ?></th><?php endforeach ?><th class="c">Total</th></tr></thead><tbody>
     <?php $mo = ''; foreach ($sEvents as $ev): $m = MONTHS[(int)date('n', strtotime($ev['date']))] . ' ' . date('Y', strtotime($ev['date']));
@@ -137,10 +135,21 @@ if (isset($_GET['export']) || isset($_GET['druck'])) {
         <td class="c"><?= $yes ?><?= $need !== null ? '/' . $need : '' ?></td></tr>
     <?php endforeach ?>
     </tbody></table></div>
+    <?php elseif ($onlyMine): ?>
+    <div class="tscroll"><table class="plan-table"><thead><tr><th>Datum</th><th>Zeit</th><th>Event</th><th>Ort</th></tr></thead><tbody>
+    <?php $mo = ''; $count = 0; foreach ($sEvents as $ev): if (($sPlan[$ev['id']][$me['id']]['status'] ?? '') !== 'yes') continue; $count++;
+        $m = MONTHS[(int)date('n', strtotime($ev['date']))] . ' ' . date('Y', strtotime($ev['date']));
+        if ($m !== $mo): $mo = $m; ?><tr class="month"><td colspan="4"><?= e($m) ?></td></tr><?php endif;
+        $grp = $sGroups[$ev['id']][$me['id']] ?? []; ?>
+      <tr><td><?= fmt_date($ev['date']) ?></td><td><?= e($ev['time_text']) ?></td><td><?= e($ev['title']) ?><?= $grp ? ' <b>· Gruppe ' . e(implode(', ', $grp)) . '</b>' : '' ?></td><td><?= e($ev['place']) ?></td></tr>
+    <?php endforeach ?>
+    <?php if (!$count): ?><tr><td colspan="4">Du bist noch für keine Termine eingetragen.</td></tr><?php endif ?>
+    </tbody></table></div>
+    <p><b><?= $count ?></b> Einsätze in der Saison <?= e($label) ?>.</p>
     <?php else: ?>
     <div class="tscroll"><table class="plan-table"><thead><tr><th>Datum</th><th>Zeit</th><th>Event</th><th>Ort</th><th class="c">Ich</th><th>Bemerkung</th></tr></thead><tbody>
     <?php $mo = ''; $count = 0; foreach ($sEvents as $ev): $mine = $sPlan[$ev['id']][$me['id']] ?? null; $stt = $mine['status'] ?? '';
-        if ($onlyMine && $stt !== 'yes') continue; if ($stt === 'yes') $count++;
+        if ($stt === 'yes') $count++;
         $m = MONTHS[(int)date('n', strtotime($ev['date']))] . ' ' . date('Y', strtotime($ev['date']));
         if ($m !== $mo): $mo = $m; ?><tr class="month"><td colspan="6"><?= e($m) ?></td></tr><?php endif;
         $grp = $sGroups[$ev['id']][$me['id']] ?? []; ?>
@@ -149,7 +158,18 @@ if (isset($_GET['export']) || isset($_GET['druck'])) {
     <?php endforeach ?>
     </tbody></table></div>
     <p><b><?= $count ?></b> Einsätze in der Saison <?= e($label) ?>.</p>
-    <?php endif;
+    <?php endif ?>
+
+    <div class="noprint stack">
+      <button type="button" class="btn" data-print>Drucken / als PDF speichern</button>
+      <div class="card stack" data-print-info hidden>
+        <p><b>Drucken geht hier nicht.</b> In der App vom Home-Bildschirm und im Browser von WhatsApp gibt es kein Druckfenster.</p>
+        <p class="note">So geht es: diese Seite in Safari oder Chrome öffnen (Adresse unten kopieren) und dort <b>Teilen → Drucken</b> wählen. Dort lässt sich der Plan auch als PDF sichern.</p>
+        <input type="text" readonly value="<?= e(base_url() . '/admin/plan.php?druck=' . $view) ?>" aria-label="Adresse dieser Seite" onclick="this.select()">
+      </div>
+      <a class="note" href="<?= $leads ? 'leaders.php' : 'plan.php#saisonplanung' ?>">← Zurück</a>
+    </div>
+    <?php
     layout_foot();
     exit;
 }
@@ -167,11 +187,11 @@ $plan = [];   // event_id => leader_id => row
 if ($events) {
     $ids = implode(',', array_map('intval', array_column($events, 'id')));
     foreach ($pdo->query("SELECT a.*, l.name FROM leader_availability a JOIN leaders l ON l.id = a.leader_id
-        WHERE a.event_id IN ($ids) AND l.role <> 'admin' ORDER BY l.name") as $r) {
+        WHERE a.event_id IN ($ids) AND l.role = 'leiter' ORDER BY l.name") as $r) {
         $plan[$r['event_id']][$r['leader_id']] = $r;
     }
 }
-$leaders = $pdo->query("SELECT id, name, phone FROM leaders WHERE role <> 'admin' ORDER BY name")->fetchAll();
+$leaders = $pdo->query("SELECT id, name, phone FROM leaders WHERE role = 'leiter' ORDER BY name")->fetchAll();
 $templates = $isHead ? $pdo->query('SELECT id, name FROM event_templates ORDER BY sort, name')->fetchAll() : [];
 
 // Übersicht: wo fehlen Leiter? / Wo bin ich eingetragen?
@@ -186,19 +206,27 @@ foreach ($events as $ev) {
     if (($plan[$ev['id']][$me['id']]['status'] ?? '') === 'yes') $mineCount++;
 }
 
+// Hauptleiter: die aktuelle Woche zuoberst, der Rest der Saison eingeklappt
+$sections = [$events];
+$weekLabel = '';
+if ($isHead && !$showPast && $events) {
+    [$wFrom, $wTo] = week_of(date('Y-m-d'));
+    $week = array_values(array_filter($events, fn($e) => $e['date'] <= $wTo));
+    if (!$week) {
+        [$wFrom, $wTo] = week_of($events[0]['date']);
+        $week = array_values(array_filter($events, fn($e) => $e['date'] <= $wTo));
+    }
+    $weekLabel = ($wFrom <= date('Y-m-d') ? 'Diese Woche' : 'Nächste Woche mit Events') . ': ' . date('d.m.', strtotime($wFrom)) . '–' . date('d.m.', strtotime($wTo));
+    $sections = [$week, array_values(array_filter($events, fn($e) => $e['date'] > $wTo))];
+}
+
 layout_head('Leiterplan', admin_nav(), 'plan.php');
 ?>
 <div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1>Leiterplan</h1></div>
 
-<div class="row">
-  <a class="btn ghost small" href="?druck=<?= $leads ? 'mein' : 'alle' ?>"><?= $leads ? 'Meinen Plan drucken' : 'Plan drucken' ?></a>
-  <?php if ($isHead): ?><a class="btn ghost small" href="?export=1">Export Excel</a><a class="btn ghost small" href="import.php?art=plan">Import Excel</a><?php endif ?>
-</div>
-
 <?php if ($isHead): ?>
 <div class="card stack">
-  <p>Hier tragen sich die Leiter für die ganze Saison ein. Du siehst pro Event, ob genug Leiter da sind, und kannst Leiter ergänzen oder streichen.
-    Der Bedarf richtet sich nach den Anmeldungen (etwa 7 Kinder pro Leiter) oder nach deiner Vorgabe.</p>
+  <p class="note">Die Leiter tragen sich hier für die Saison ein. Du siehst pro Event, ob genug Leiter da sind, und kannst Leiter ergänzen oder streichen.</p>
   <?php if ($missing):
       $lines = array_map(fn($m) => '• ' . fmt_date($m['date']) . ' ' . $m['title'] . ': ' . ($m['need'] - $m['n_yes']) . ' fehlen', $missing);
       $text = "🙋 *Leiter gesucht*\n" . implode("\n", $lines) . "\n\nBitte im Leiterplan eintragen:\n" . base_url() . '/admin/plan.php'; ?>
@@ -209,19 +237,6 @@ layout_head('Leiterplan', admin_nav(), 'plan.php');
   <?php endif ?>
 </div>
 
-<details class="card"><summary><b>Saison vorbereiten: Termine als Serie erstellen</b></summary>
-  <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="series">
-    <p class="note">Erstellt für jede Woche im Zeitraum einen Entwurf aus der Vorlage (am Wochentag der Vorlage). So können sich die Leiter schon zu Saisonbeginn eintragen.
-      Eltern sehen die Termine erst, wenn du sie einzeln freischaltest.</p>
-    <label for="sv">Vorlage</label>
-    <select id="sv" name="template_id"><?php foreach ($templates as $t): ?><option value="<?= (int)$t['id'] ?>"><?= e($t['name']) ?></option><?php endforeach ?></select>
-    <div class="row">
-      <span class="stack grow"><label for="sf">Von</label><input type="date" id="sf" name="from" required></span>
-      <span class="stack grow"><label for="st">Bis</label><input type="date" id="st" name="to" required></span>
-    </div>
-    <button class="btn small">Serie erstellen</button>
-  </form>
-</details>
 <?php else: ?>
 <div class="card">
   <p>Trag dich für alle Trainings ein, an denen du leiten kannst. Du kannst es jederzeit ändern. Die Hauptleiter planen damit die Gruppen.</p>
@@ -229,8 +244,12 @@ layout_head('Leiterplan', admin_nav(), 'plan.php');
 </div>
 <?php endif ?>
 
-<?php $month = '';
-foreach ($events as $ev):
+<?php if ($isHead && $weekLabel): ?><h2 class="month"><?= e($weekLabel) ?></h2><?php endif ?>
+<?php foreach ($sections as $secNo => $secEvents):
+    if ($secNo === 1 && !$secEvents) continue;
+    if ($secNo === 1): ?><details class="saison" id="saison"><summary class="btn ghost">Weitere Termine der Saison (<?= count($secEvents) ?>)</summary><?php endif;
+    $month = $secNo === 0 && $isHead ? 'woche' : '';
+foreach ($secEvents as $ev):
     $rows = $plan[$ev['id']] ?? [];
     $yes = array_filter($rows, fn($r) => $r['status'] === 'yes');
     $no = array_filter($rows, fn($r) => $r['status'] === 'no');
@@ -238,7 +257,7 @@ foreach ($events as $ev):
     $my = $rows[$me['id']]['status'] ?? '';
     $state = $need === null ? '' : (count($yes) >= $need ? 'ok' : 'short');
     $m = MONTHS[(int)date('n', strtotime($ev['date']))] . ' ' . date('Y', strtotime($ev['date']));
-    if ($m !== $month): $month = $m; ?><h2 class="month"><?= e($m) ?></h2><?php endif ?>
+    if ($month !== 'woche' && $m !== $month): $month = $m; ?><h2 class="month"><?= e($m) ?></h2><?php endif ?>
 <article class="card plan <?= $state ?>" id="e<?= (int)$ev['id'] ?>">
   <div class="row between nowrap">
     <div><span class="date"><?= fmt_date($ev['date']) ?><?= $ev['time_text'] !== '' ? ' · ' . e($ev['time_text']) : '' ?></span>
@@ -278,7 +297,32 @@ foreach ($events as $ev):
   </details>
   <?php endif ?>
 </article>
-<?php endforeach ?>
-<?php if (!$events): ?><div class="card"><p><?= $isHead ? 'Noch keine Events. Erstelle oben eine Serie für die Saison.' : 'Noch keine Events geplant.' ?></p></div><?php endif ?>
+<?php endforeach;
+    if ($secNo === 1): ?></details><?php endif;
+endforeach ?>
+<?php if (!$events): ?><div class="card"><p><?= $isHead ? 'Noch keine Events. Erstelle unten unter «Saisonplanung» eine Serie für die Saison.' : 'Noch keine Events geplant.' ?></p></div><?php endif ?>
 <p class="note"><a href="?alle=<?= $showPast ? '0' : '1' ?>"><?= $showPast ? 'Nur kommende Events zeigen' : 'Ganze Saison zeigen (auch vergangene)' ?></a></p>
+<?php if ($isHead): ?>
+<details class="card" id="saisonplanung" <?= $events ? '' : 'open' ?>><summary><b>Saisonplanung</b> <span class="note">(1× pro Saison)</span></summary>
+  <div class="stack">
+  <h3>Termine als Serie erstellen</h3>
+  <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="series">
+    <p class="note">Erstellt für jede Woche im Zeitraum einen Entwurf aus der Vorlage (am Wochentag der Vorlage). So können sich die Leiter schon zu Saisonbeginn eintragen.
+      Eltern sehen die Termine erst, wenn du sie einzeln freischaltest.</p>
+    <label for="sv">Vorlage</label>
+    <select id="sv" name="template_id"><?php foreach ($templates as $t): ?><option value="<?= (int)$t['id'] ?>"><?= e($t['name']) ?></option><?php endforeach ?></select>
+    <div class="row">
+      <span class="stack grow"><label for="sf">Von</label><input type="date" id="sf" name="from" required></span>
+      <span class="stack grow"><label for="st">Bis</label><input type="date" id="st" name="to" required></span>
+    </div>
+    <button class="btn small">Serie erstellen</button>
+  </form>
+  <h3>Leiterplan als Excel</h3>
+  <p class="note">Plan exportieren, in Excel bearbeiten und wieder importieren.</p>
+  <div class="row"><a class="btn ghost small" href="?export=1">Export Excel</a><a class="btn ghost small" href="import.php?art=plan">Import Excel</a></div>
+  <h3>Gesamtplan drucken</h3>
+  <div class="row"><a class="btn ghost small" href="?druck=alle">Gesamtplan aller Leiter</a></div>
+  </div>
+</details>
+<?php endif ?>
 <?php layout_foot();

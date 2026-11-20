@@ -197,3 +197,10 @@ table.plan-table tr.month td { background: var(--bg); font-weight: 700; color: v
   table.plan-table tr { break-inside: avoid; }
 }
 [hidden] { display: none !important; }
+/* Eingeklappte Events (Eltern), Kinderauswahl, Saison-Bereich */
+.card.compact { padding-top: 12px; padding-bottom: 12px; opacity: .92; }
+.card.compact h3 { margin: 2px 0 0; }
+.kidpick { max-height: 360px; overflow-y: auto; display: grid; gap: 6px; }
+details.saison > summary { list-style: none; width: 100%; margin: 4px 0 12px; }
+details.saison > summary::-webkit-details-marker { display: none; }
+details.saison[open] > summary { margin-bottom: 12px; }

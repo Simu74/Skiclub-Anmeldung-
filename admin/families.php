@@ -137,13 +137,7 @@ layout_head('Familien', admin_nav(), 'families.php');
 
 <p class="note">Stufen: <span class="piste p-blue"></span> Blau 1–2 · <span class="piste p-red"></span> Rot 3–4 · <span class="piste p-black"></span> Schwarz 5. Nach Stufe werden die Gruppen eingeteilt.</p>
 
-<div class="card stack">
-  <input type="search" id="famfilter" placeholder="Familie oder Kind suchen …" aria-label="Familie oder Kind suchen" data-filter=".fam">
-  <div class="row">
-    <a class="btn ghost small" href="families.php?export=1">Export Excel</a>
-    <a class="btn ghost small" href="import.php?art=familien">Import Excel</a>
-  </div>
-</div>
+<input type="search" id="famfilter" placeholder="Familie oder Kind suchen …" aria-label="Familie oder Kind suchen" data-filter=".fam">
 
 <div class="famlist">
 <?php foreach ($families as $f): $link = family_link($f); $kids = $kidsBy[$f['id']] ?? [];
@@ -211,4 +205,14 @@ layout_head('Familien', admin_nav(), 'families.php');
 </details>
 <?php endforeach ?>
 </div>
+
+<details class="card"><summary><b>Excel Import / Export</b></summary>
+  <div class="stack">
+    <p class="note">Alle Familien und Kinder als Excel herunterladen, in Excel ergänzen und wieder hochladen. Vor dem Übernehmen siehst du eine Vorschau.</p>
+    <div class="row">
+      <a class="btn ghost small" href="families.php?export=1">Export Excel</a>
+      <a class="btn ghost small" href="import.php?art=familien">Import Excel</a>
+    </div>
+  </div>
+</details>
 <?php layout_foot();
