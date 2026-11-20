@@ -100,7 +100,7 @@ if (isset($_GET['export']) || isset($_GET['druck'])) {
     ?>
     <div><p class="eyebrow"><?= e($config['site_name']) ?> · Saison <?= e($label) ?></p>
       <h1><?= e($title) ?></h1>
-      <p class="note">Stand <?= date('d.m.Y') ?>.<?= $all ? ' x = leitet, – = kann nicht.' : ($onlyMine ? '' : ' Grün = du leitest.') ?> Änderungen bitte im Leiterplan der App eintragen.</p></div>
+      <p class="note">Stand <?= date('d.m.Y') ?>.<?= $all ? ' x = leitet, – = kann nicht.' : ($onlyMine ? '' : ' Grün = du leitest.') ?> Änderungen bitte in der App eintragen.</p></div>
     <?php if ($leads): ?>
     <div class="noprint seg">
       <a class="segbtn" href="?druck=mein" <?= $onlyMine ? 'aria-current="page"' : '' ?>>Meine Einsätze</a>
