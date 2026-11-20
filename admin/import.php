@@ -9,7 +9,7 @@ require dirname(__DIR__) . '/inc/xlsx.php';
 require_leader('hauptleiter');
 $pdo = db();
 $art = ($_GET['art'] ?? '') === 'plan' ? 'plan' : 'familien';
-$back = $art === 'plan' ? 'plan.php' : 'families.php';
+$back = $art === 'plan' ? 'saison.php' : 'families.php';
 
 /** Stufe aus «Rot 3», «3» oder «rot» lesen. null = leer/ungültig. */
 function parse_skill(string $v): ?int
@@ -216,9 +216,9 @@ if (is_post()) {
     }
 }
 
-layout_head('Import', admin_nav(), $back);
+layout_head('Import', admin_nav(), 'saison.php');
 ?>
-<div><p class="eyebrow"><a href="<?= $back ?>"><?= $art === 'plan' ? 'Leiterplan' : 'Familien' ?></a> · Import</p>
+<div><p class="eyebrow"><a href="<?= $back ?>"><?= $art === 'plan' ? 'Saisonplanung' : 'Familien' ?></a> · Import</p>
   <h1><?= $art === 'plan' ? 'Leiterplan importieren' : 'Familien & Kinder importieren' ?></h1></div>
 
 <?php if ($report): $nChanges = $art === 'plan' ? $report['set'] + $report['cleared'] + $report['needed'] : $report['fam_new'] + $report['fam_upd'] + $report['kid_new'] + $report['kid_upd']; ?>

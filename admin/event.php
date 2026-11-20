@@ -63,6 +63,10 @@ if (is_post()) {
             break;
         case 'leader':
             $lid = (int)$_POST['leader_id'] ?: null;
+            if ($lid && ($other = leader_busy($id, $lid))) {
+                flash('Geht nicht: zur selben Zeit schon eingeteilt für «' . $other['title'] . '».');
+                break;
+            }
             $pdo->prepare('INSERT OR REPLACE INTO group_leaders (event_id, group_no, leader_id) VALUES (?, ?, ?)')
                 ->execute([$id, (int)$_POST['group_no'], $lid]);
             flash('Leiter zugewiesen.');
@@ -94,16 +98,6 @@ if (is_post()) {
             $pdo->prepare('UPDATE events SET attendance_taken = 1 WHERE id = ?')->execute([$id]);
             $pdo->commit();
             flash('Präsenz gespeichert: ' . count($here) . ' Kinder da.');
-            break;
-        case 'availability':
-            $s = leads($me) ? ($_POST['status'] ?? '') : '';
-            if ($s === 'clear') {
-                $pdo->prepare('DELETE FROM leader_availability WHERE event_id = ? AND leader_id = ?')->execute([$id, $me['id']]);
-            } elseif (in_array($s, ['yes', 'no'], true)) {
-                $pdo->prepare('INSERT OR REPLACE INTO leader_availability (event_id, leader_id, status, note) VALUES (?, ?, ?, ?)')
-                    ->execute([$id, $me['id'], $s, trim(mb_substr((string)($_POST['note'] ?? ''), 0, 200))]);
-            }
-            flash($s === 'yes' ? 'Danke! Du bist im Leiterplan eingetragen.' : 'Gespeichert.');
             break;
         case 'feedback':
             $kind = array_key_exists($_POST['kind'] ?? '', FEEDBACK_KINDS) ? $_POST['kind'] : 'note';
@@ -169,7 +163,6 @@ $st = $pdo->prepare("SELECT a.*, l.name FROM leader_availability a JOIN leaders 
 $st->execute([$id]);
 $availability = $st->fetchAll();
 $avail = array_column($availability, null, 'leader_id');
-$mine = $avail[$me['id']] ?? null;
 $files = event_files($id);
 $groups = event_groups($ev);
 $myGroups = array_keys(array_filter($groups, fn($g) => (int)$g['leader_id'] === (int)$me['id']));
@@ -227,20 +220,7 @@ layout_head($ev['title'], admin_nav(), 'index.php');
 </details>
 <?php endif ?>
 
-<?php if ($ev['status'] !== 'cancelled' && leads($me)): ?>
-<form method="post" class="card stack"><?= csrf_field() ?><input type="hidden" name="action" value="availability"><input type="hidden" name="tab" value="<?= e($tab) ?>">
-  <div class="row between"><h3>Leiterplan</h3>
-    <?php if ($mine): ?><span class="pill <?= $mine['status'] === 'yes' ? 'open' : 'cancelled' ?>"><?= $mine['status'] === 'yes' ? 'Ich bin dabei' : 'Ich kann nicht' ?></span><?php endif ?></div>
-  <?php if ($myGroups): ?><p>Du leitest <b>Gruppe <?= implode(', ', $myGroups) ?></b>.</p><?php endif ?>
-  <label for="avnote" class="note">Bemerkung (freiwillig)</label>
-  <input type="text" id="avnote" name="note" value="<?= e($mine['note'] ?? '') ?>" maxlength="200" placeholder="z.B. erst ab 14:30">
-  <div class="row">
-    <button class="btn small" name="status" value="yes">Ich leite</button>
-    <button class="btn ghost small" name="status" value="no">Ich kann nicht</button>
-  </div>
-  <p class="note"><a href="plan.php#e<?= (int)$ev['id'] ?>">Ganze Saison im Leiterplan ansehen</a></p>
-</form>
-<?php endif ?>
+<?php if (!$isHead && $myGroups): ?><p class="card">Du leitest <b>Gruppe <?= implode(', ', $myGroups) ?></b>.</p><?php endif ?>
 
 <div class="seg" role="tablist">
   <?php foreach ($tabs as $k => $v): ?><a class="segbtn" href="<?= $self ?>&tab=<?= $k ?>" <?= $tab === $k ? 'aria-current="page"' : '' ?>><?= e($v) ?><?= $k === 'anmeldungen' ? ' (' . count($kidsIn) . ')' : '' ?></a><?php endforeach ?>
@@ -329,7 +309,7 @@ layout_head($ev['title'], admin_nav(), 'index.php');
       <button class="btn small"><?= $groups ? 'Neu einteilen' : 'Automatisch einteilen' ?></button></div>
     <?php if ($groups): ?><p class="note">Achtung: «Neu einteilen» überschreibt Ihre Verschiebungen.</p><?php endif ?>
   </form>
-  <div class="card"><div class="row between"><h3>Leiterplan</h3><a class="note" href="plan.php#e<?= (int)$ev['id'] ?>">ergänzen</a></div>
+  <div class="card"><div class="row between"><h3>Leiterplanung</h3><a class="note" href="plan.php#e<?= (int)$ev['id'] ?>">ergänzen</a></div>
     <?php foreach ($availability as $av): ?><p><?= $av['status'] === 'yes' ? '✓' : '✗' ?> <b><?= e($av['name']) ?></b> <span class="note"><?= $av['status'] === 'yes' ? 'eingetragen' : 'kann nicht' ?><?= $av['note'] !== '' ? ' · ' . e($av['note']) : '' ?></span></p><?php endforeach ?>
     <?php if (!$availability): ?><p class="note">Noch niemand im Leiterplan eingetragen.</p><?php endif ?>
   </div>

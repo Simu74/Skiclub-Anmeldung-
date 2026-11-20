@@ -102,9 +102,9 @@ foreach ($pdo->query("SELECT fb.kid_id, fb.kind, fb.skill, fb.text, fb.created_a
     if (count($recentByKid[$fb['kid_id']] ?? []) < 3) $recentByKid[$fb['kid_id']][] = $fb;
 }
 
-layout_head('Familien', admin_nav(), 'families.php');
+layout_head('Familien', admin_nav(), 'saison.php');
 ?>
-<div><p class="eyebrow">Hauptleiter</p><h1>Familien &amp; Kinder</h1>
+<div><p class="eyebrow"><a href="saison.php">← Saisonplanung</a></p><h1>Familien &amp; Kinder</h1>
   <p class="note"><?= count($families) ?> Familien, <?= $nKids ?> aktive Kinder. Jede Familie bekommt einen persönlichen Link, kein Passwort.</p></div>
 
 <?php if ($openFeedback): ?>

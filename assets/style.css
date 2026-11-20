@@ -204,3 +204,12 @@ table.plan-table tr.month td { background: var(--bg); font-weight: 700; color: v
 details.saison > summary { list-style: none; width: 100%; margin: 4px 0 12px; }
 details.saison > summary::-webkit-details-marker { display: none; }
 details.saison[open] > summary { margin-bottom: 12px; }
+details.person > summary { list-style: none; cursor: pointer; }
+details.person > summary::-webkit-details-marker { display: none; }
+details.person[open] { padding-bottom: 12px; }
+details.person[open] > summary .note:last-child { visibility: hidden; }
+details.edit > summary { list-style: none; margin-top: 8px; }
+details.edit > summary::-webkit-details-marker { display: none; }
+details.edit[open] > summary { margin-bottom: 8px; }
+.drivers { margin: 8px 0 0; padding: 10px 12px; background: var(--accent-soft); border-radius: 10px; }
+.drivers p { margin: 4px 0; }

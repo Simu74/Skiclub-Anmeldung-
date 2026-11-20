@@ -210,6 +210,23 @@ if ($events && $kidIds) {
 $st = $pdo->prepare('SELECT event_id, seats, note FROM drivers WHERE family_id = ?');
 $st->execute([$family['id']]);
 $drivers = array_column($st->fetchAll(), null, 'event_id');
+
+// Fahrgelegenheiten anderer Familien und (nach Anmeldeschluss) die Leiter pro Event
+$rides = [];
+$eventLeaders = [];
+if ($events) {
+    $ids = implode(',', array_map('intval', array_column($events, 'id')));
+    $st = $pdo->prepare("SELECT d.event_id, d.seats, d.note, f.name, f.phone FROM drivers d JOIN families f ON f.id = d.family_id
+        WHERE d.event_id IN ($ids) AND d.family_id <> ? ORDER BY f.name");
+    $st->execute([$family['id']]);
+    foreach ($st as $d) $rides[$d['event_id']][] = $d;
+    foreach ($pdo->query("SELECT DISTINCT x.event_id, l.name FROM (
+            SELECT event_id, leader_id FROM leader_availability WHERE status = 'yes' AND event_id IN ($ids)
+            UNION SELECT event_id, leader_id FROM group_leaders WHERE event_id IN ($ids)) x
+        JOIN leaders l ON l.id = x.leader_id WHERE l.role = 'leiter' ORDER BY l.name") as $r) {
+        $eventLeaders[$r['event_id']][] = $r['name'];
+    }
+}
 ?>
   <div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1>Hallo Familie <?= e($family['name']) ?></h1></div>
 
@@ -254,9 +271,10 @@ $drivers = array_column($st->fetchAll(), null, 'event_id');
     <dl class="meta">
       <?php if ($ev['place'] !== ''): ?><dt>Ort</dt><dd><?= e($ev['place']) ?></dd><?php endif ?>
       <?php if ($ev['material'] !== ''): ?><dt>Mitnehmen</dt><dd><?= e($ev['material']) ?></dd><?php endif ?>
+      <?php if ($ev['info'] !== ''): ?><dt>Info</dt><dd><?= e($ev['info']) ?></dd><?php endif ?>
       <dt>Anmelden bis</dt><dd><?= fmt_deadline($ev['deadline']) ?></dd>
+      <?php if ($closed && !empty($eventLeaders[$ev['id']])): ?><dt>Leiter</dt><dd><?= e(implode(', ', $eventLeaders[$ev['id']])) ?></dd><?php endif ?>
     </dl>
-    <?php if ($ev['info'] !== '' && $ev !== $events[0]): ?><p class="note"><?= e($ev['info']) ?></p><?php endif ?>
     <?php if ($ev['details'] !== ''): ?>
       <details class="more" <?= mb_strlen($ev['details']) < 280 ? 'open' : '' ?>><summary>Infos</summary><?= format_text($ev['details']) ?></details>
     <?php endif ?>
@@ -272,6 +290,18 @@ $drivers = array_column($st->fetchAll(), null, 'event_id');
           <?php foreach ($mineIn as $k): ?><span class="chip yes">✓ <?= e($k['first_name']) ?></span><?php endforeach ?>
           <?php foreach ($mineOut as $k): ?><span class="chip"><?= e($k['first_name']) ?>: abgemeldet</span><?php endforeach ?>
           <?php if (isset($drivers[$ev['id']])): ?><span class="chip yes">Sie fahren · <?= (int)$drivers[$ev['id']]['seats'] ?> Plätze</span><?php endif ?>
+        </div>
+      <?php endif ?>
+
+      <?php if ($mineIn && !isset($drivers[$ev['id']])): $evRides = $rides[$ev['id']] ?? []; ?>
+        <div class="drivers">
+          <b>Fahrgelegenheiten</b>
+          <?php foreach ($evRides as $d):
+              $msg = 'Hallo Familie ' . $d['name'] . ', hätten Sie für «' . $ev['title'] . '» am ' . fmt_date($ev['date']) . ' noch Platz für ' . implode(' und ', array_column($mineIn, 'first_name')) . '? Familie ' . $family['name']; ?>
+            <p>🚗 <b>Familie <?= e($d['name']) ?></b> · <?= (int)$d['seats'] ?> <?= (int)$d['seats'] === 1 ? 'Platz' : 'Plätze' ?><?= $d['note'] !== '' ? '<br><span class="note">' . e($d['note']) . '</span>' : '' ?>
+              <?php if ($d['phone'] !== ''): ?><br><a href="<?= e(wa_link($msg, $d['phone'])) ?>" target="_blank" rel="noopener">WhatsApp</a> · <a href="tel:<?= e(preg_replace('/[^0-9+]/', '', $d['phone'])) ?>">Anrufen</a><?php endif ?></p>
+          <?php endforeach ?>
+          <?php if (!$evRides): ?><p class="note">Noch keine Familie bietet Plätze an.</p><?php endif ?>
         </div>
       <?php endif ?>
 

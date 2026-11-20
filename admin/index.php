@@ -45,7 +45,8 @@ if ($isHead && $mode === '' && $events) {
     $events = $inWeek;
 }
 
-layout_head('Events', admin_nav(), 'index.php');
+$openFeedback = $isHead ? (int)$pdo->query('SELECT COUNT(*) FROM kid_feedback WHERE done = 0')->fetchColumn() : 0;
+layout_head($isHead ? 'Events' : 'Einsätze', admin_nav(), 'index.php');
 ?>
 <div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1><?= $isHead ? 'Events' : 'Meine Einsätze' ?></h1></div>
 
@@ -58,9 +59,10 @@ layout_head('Events', admin_nav(), 'index.php');
   </div>
   <p class="note">Neue Events sind zuerst ein Entwurf. Eltern sehen sie erst nach dem Freischalten. <a href="templates.php">Vorlagen bearbeiten</a></p>
 </div>
+<?php if ($openFeedback): ?><p class="note"><a href="families.php"><?= $openFeedback ?> offene Rückmeldungen der Leiter</a> zu Kindern</p><?php endif ?>
 <?php if ($weekLabel): ?><h2 class="month"><?= e($weekLabel) ?></h2><?php endif ?>
 <?php else: ?>
-<p class="note">Hier siehst du die Events, für die du im <a href="plan.php">Leiterplan</a> eingetragen bist oder eine Gruppe leitest.</p>
+<p class="note">Hier siehst du die Events, für die du in <a href="plan.php">Meine Planung</a> eingetragen bist oder eine Gruppe leitest.</p>
 <?php endif ?>
 
 <?php foreach ($events as $ev): ?>
@@ -79,8 +81,8 @@ layout_head('Events', admin_nav(), 'index.php');
 </article>
 <?php endforeach ?>
 <?php if (!$events): ?><div class="card"><p><?= $isHead
-    ? 'Keine kommenden Events. Erstelle oben eines aus einer Vorlage oder im Plan eine Serie für die Saison.'
-    : ($showPast ? 'Keine Einsätze gefunden.' : 'Im Moment bist du für keine kommenden Events eingetragen. Trag dich im <a href="plan.php">Leiterplan</a> ein.') ?></p></div><?php endif ?>
+    ? 'Keine kommenden Events. Erstelle oben eines aus einer Vorlage oder unter <a href="saison.php">Saisonplanung</a> eine Serie.'
+    : ($showPast ? 'Keine Einsätze gefunden.' : 'Im Moment bist du für keine kommenden Events eingetragen. Trag dich in <a href="plan.php">Meine Planung</a> ein.') ?></p></div><?php endif ?>
 
 <?php if ($more): ?><a class="btn ghost" href="?alle=kommend">Alle kommenden Events zeigen (<?= $more ?> weitere)</a><?php endif ?>
 
