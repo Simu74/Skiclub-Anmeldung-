@@ -110,9 +110,9 @@ function tpl_form(array $t, array $cats): void
     <?php
 }
 
-layout_head('Vorlagen', admin_nav(), 'templates.php');
+layout_head('Vorlagen', admin_nav(), 'saison.php');
 ?>
-<div><p class="eyebrow">Hauptleiter</p><h1>Kategorien &amp; Vorlagen</h1></div>
+<div><p class="eyebrow"><a href="saison.php">← Saisonplanung</a></p><h1>Kategorien &amp; Vorlagen</h1></div>
 
 <div class="card">
   <h2>Kategorien</h2>

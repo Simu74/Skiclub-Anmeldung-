@@ -1,6 +1,7 @@
 <?php
-// Leiterplan: Zu Saisonbeginn tragen sich die Leiter für die Trainings ein.
+// Leiterplanung: Zu Saisonbeginn tragen sich die Leiter für die Trainings ein («Meine Planung»).
 // Hauptleiter sehen pro Event, ob genug Leiter da sind, und ergänzen oder streichen Leiter.
+// Serien, Excel und Gesamtplan liegen unter «Saisonplanung» (saison.php).
 
 declare(strict_types=1);
 require dirname(__DIR__) . '/inc/bootstrap.php';
@@ -12,9 +13,13 @@ $pdo = db();
 $showPast = !empty($_GET['alle']);
 $back = 'plan.php' . ($showPast ? '?alle=1' : '');
 
-function set_plan(int $eventId, int $leaderId, string $status): void
+/** Gibt eine Fehlermeldung zurück, wenn der Leiter zur selben Zeit schon eingeteilt ist. */
+function set_plan(int $eventId, int $leaderId, string $status): ?string
 {
     $pdo = db();
+    if ($status === 'yes' && ($other = leader_busy($eventId, $leaderId))) {
+        return 'Geht nicht: zur selben Zeit schon eingeteilt für «' . $other['title'] . '» (' . fmt_date($other['date']) . ').';
+    }
     if ($status === 'clear') {
         $pdo->prepare('DELETE FROM leader_availability WHERE event_id = ? AND leader_id = ?')->execute([$eventId, $leaderId]);
     } elseif (in_array($status, ['yes', 'no'], true)) {
@@ -22,6 +27,7 @@ function set_plan(int $eventId, int $leaderId, string $status): void
         $pdo->prepare('INSERT INTO leader_availability (event_id, leader_id, status) VALUES (?, ?, ?)
             ON CONFLICT (event_id, leader_id) DO UPDATE SET status = excluded.status')->execute([$eventId, $leaderId, $status]);
     }
+    return null;
 }
 
 if (is_post()) {
@@ -29,48 +35,26 @@ if (is_post()) {
     $a = $_POST['action'] ?? '';
     $eid = (int)($_POST['event_id'] ?? 0);
     $anchor = $eid ? '#e' . $eid : '';
+    $st = $pdo->prepare('SELECT * FROM events WHERE id = ?');
+    $st->execute([$eid]);
+    $pev = $st->fetch() ?: null;
     if ($a === 'me' && !$leads) {
-        flash('Admins erscheinen nicht im Leiterplan.');
+        flash('Nur Leiter tragen sich in der Leiterplanung ein.');
+    } elseif ($a === 'me' && (!$pev || deadline_passed($pev))) {
+        flash('Der Anmeldeschluss ist vorbei. Änderungen bitte einem Hauptleiter melden.');
     } elseif ($a === 'me') {
-        set_plan($eid, (int)$me['id'], (string)($_POST['status'] ?? ''));
-        flash(($_POST['status'] ?? '') === 'yes' ? 'Eingetragen. Danke!' : 'Gespeichert.');
+        $err = set_plan($eid, (int)$me['id'], (string)($_POST['status'] ?? ''));
+        flash($err ?? (($_POST['status'] ?? '') === 'yes' ? 'Eingetragen. Danke!' : 'Gespeichert.'));
     } elseif (!$isHead) {
         http_response_code(403);
         exit('Dafür fehlt die Berechtigung.');
     } elseif ($a === 'set') {
-        set_plan($eid, (int)$_POST['leader_id'], (string)($_POST['status'] ?? ''));
-        flash('Leiterplan angepasst.');
+        $err = set_plan($eid, (int)$_POST['leader_id'], (string)($_POST['status'] ?? ''));
+        flash($err ?? 'Leiterplanung angepasst.');
     } elseif ($a === 'needed') {
         $v = trim((string)($_POST['needed'] ?? ''));
         $pdo->prepare('UPDATE events SET leaders_needed = ? WHERE id = ?')->execute([$v === '' ? null : max(0, min(20, (int)$v)), $eid]);
         flash('Bedarf gespeichert.');
-    } elseif ($a === 'series') {
-        $st = $pdo->prepare('SELECT * FROM event_templates WHERE id = ?');
-        $st->execute([(int)$_POST['template_id']]);
-        $t = $st->fetch();
-        $from = strtotime((string)($_POST['from'] ?? ''));
-        $to = strtotime((string)($_POST['to'] ?? ''));
-        if (!$t || !$from || !$to || $to < $from || $to - $from > 366 * 86400) {
-            flash('Bitte Vorlage und einen Zeitraum (höchstens ein Jahr) wählen.');
-        } else {
-            $cats = categories();
-            $exists = $pdo->prepare('SELECT 1 FROM events WHERE date = ? AND category_id IS ?');
-            $n = 0;
-            for ($d = $from; $d <= $to; $d = strtotime('+1 day', $d)) {
-                if ((int)date('w', $d) !== (int)$t['weekday']) continue;
-                $date = date('Y-m-d', $d);
-                $exists->execute([$date, $t['category_id']]);
-                if ($exists->fetchColumn()) continue;
-                $ev = event_from_template($t, $date);
-                unset($ev['id']);
-                $ev['type'] = $cats[$t['category_id']]['kind'] ?? 'off';
-                $cols = array_keys($ev);
-                $pdo->prepare('INSERT INTO events (' . implode(',', $cols) . ') VALUES (:' . implode(', :', $cols) . ')')->execute($ev);
-                $n++;
-            }
-            flash($n ? "$n Entwürfe erstellt. Die Leiter können sich jetzt eintragen." : 'Keine neuen Daten, diese Events gibt es schon.');
-        }
-        $anchor = '';
     }
     redirect($back . $anchor);
 }
@@ -167,7 +151,7 @@ if (isset($_GET['export']) || isset($_GET['druck'])) {
         <p class="note">So geht es: diese Seite in Safari oder Chrome öffnen (Adresse unten kopieren) und dort <b>Teilen → Drucken</b> wählen. Dort lässt sich der Plan auch als PDF sichern.</p>
         <input type="text" readonly value="<?= e(base_url() . '/admin/plan.php?druck=' . $view) ?>" aria-label="Adresse dieser Seite" onclick="this.select()">
       </div>
-      <a class="note" href="<?= $leads ? 'leaders.php' : 'plan.php#saisonplanung' ?>">← Zurück</a>
+      <a class="note" href="<?= $leads ? 'leaders.php' : 'saison.php' ?>">← Zurück</a>
     </div>
     <?php
     layout_foot();
@@ -192,7 +176,17 @@ if ($events) {
     }
 }
 $leaders = $pdo->query("SELECT id, name, phone FROM leaders WHERE role = 'leiter' ORDER BY name")->fetchAll();
-$templates = $isHead ? $pdo->query('SELECT id, name FROM event_templates ORDER BY sort, name')->fetchAll() : [];
+
+// Wer ist zur selben Zeit schon bei einem anderen Event eingetragen? event_id => leader_id => anderes Event
+$busy = [];
+foreach ($events as $a) {
+    foreach ($events as $b) {
+        if ($a['id'] === $b['id'] || !events_overlap($a, $b)) continue;
+        foreach ($plan[$b['id']] ?? [] as $lid => $r) {
+            if ($r['status'] === 'yes') $busy[$a['id']][$lid] = $b;
+        }
+    }
+}
 
 // Übersicht: wo fehlen Leiter? / Wo bin ich eingetragen?
 $missing = [];
@@ -220,13 +214,13 @@ if ($isHead && !$showPast && $events) {
     $sections = [$week, array_values(array_filter($events, fn($e) => $e['date'] > $wTo))];
 }
 
-layout_head('Leiterplan', admin_nav(), 'plan.php');
+$heading = $isHead ? 'Leiterplanung' : 'Meine Planung';
+layout_head($heading, admin_nav(), 'plan.php');
 ?>
-<div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1>Leiterplan</h1></div>
+<div><p class="eyebrow"><?= e($config['site_name']) ?></p><h1><?= $heading ?></h1></div>
 
 <?php if ($isHead): ?>
 <div class="card stack">
-  <p class="note">Die Leiter tragen sich hier für die Saison ein. Du siehst pro Event, ob genug Leiter da sind, und kannst Leiter ergänzen oder streichen.</p>
   <?php if ($missing):
       $lines = array_map(fn($m) => '• ' . fmt_date($m['date']) . ' ' . $m['title'] . ': ' . ($m['need'] - $m['n_yes']) . ' fehlen', $missing);
       $text = "🙋 *Leiter gesucht*\n" . implode("\n", $lines) . "\n\nBitte im Leiterplan eintragen:\n" . base_url() . '/admin/plan.php'; ?>
@@ -239,7 +233,7 @@ layout_head('Leiterplan', admin_nav(), 'plan.php');
 
 <?php else: ?>
 <div class="card">
-  <p>Trag dich für alle Trainings ein, an denen du leiten kannst. Du kannst es jederzeit ändern. Die Hauptleiter planen damit die Gruppen.</p>
+  <p>Trag dich für alle Trainings ein, an denen du leiten kannst. Bis zum Anmeldeschluss des Events kannst du es ändern. Die Hauptleiter planen damit die Gruppen.</p>
   <p class="note">Du bist für <b><?= $mineCount ?></b> <?= $mineCount === 1 ? 'Event' : 'Events' ?> eingetragen.</p>
 </div>
 <?php endif ?>
@@ -255,6 +249,8 @@ foreach ($secEvents as $ev):
     $no = array_filter($rows, fn($r) => $r['status'] === 'no');
     $need = leaders_needed($ev);
     $my = $rows[$me['id']]['status'] ?? '';
+    $closed = deadline_passed($ev);
+    $myBusy = $busy[$ev['id']][$me['id']] ?? null;
     $state = $need === null ? '' : (count($yes) >= $need ? 'ok' : 'short');
     $m = MONTHS[(int)date('n', strtotime($ev['date']))] . ' ' . date('Y', strtotime($ev['date']));
     if ($month !== 'woche' && $m !== $month): $month = $m; ?><h2 class="month"><?= e($m) ?></h2><?php endif ?>
@@ -270,12 +266,16 @@ foreach ($secEvents as $ev):
     <?php if ($need === null): ?> · Bedarf offen<?php elseif ($state === 'short'): ?> · <b class="warnline"><?= $need - count($yes) ?> fehlen</b><?php endif ?>
     <?php if ($ev['n_in']): ?> · <?= (int)$ev['n_in'] ?> Kinder<?php endif ?>
   </p>
-  <?php if ($leads): ?><form method="post" class="toggle"><?= csrf_field() ?><input type="hidden" name="action" value="me"><input type="hidden" name="event_id" value="<?= (int)$ev['id'] ?>">
-    <button class="tbtn yes" name="status" value="<?= $my === 'yes' ? 'clear' : 'yes' ?>" aria-pressed="<?= $my === 'yes' ? 'true' : 'false' ?>">✓ Ich leite</button>
+  <?php if ($leads && $closed): ?>
+    <p class="note"><?= $my === 'yes' ? '<b>✓ Du leitest.</b> ' : ($my === 'no' ? '✗ Du kannst nicht. ' : '') ?>Anmeldeschluss vorbei, Änderungen bitte einem Hauptleiter melden.</p>
+  <?php elseif ($leads): ?>
+  <?php if ($myBusy && $my !== 'yes'): ?><p class="note">Zur selben Zeit leitest du schon «<?= e($myBusy['title']) ?>».</p><?php endif ?>
+  <form method="post" class="toggle"><?= csrf_field() ?><input type="hidden" name="action" value="me"><input type="hidden" name="event_id" value="<?= (int)$ev['id'] ?>">
+    <button class="tbtn yes" name="status" value="<?= $my === 'yes' ? 'clear' : 'yes' ?>" aria-pressed="<?= $my === 'yes' ? 'true' : 'false' ?>" <?= $myBusy && $my !== 'yes' ? 'disabled' : '' ?>>✓ Ich leite</button>
     <button class="tbtn no" name="status" value="<?= $my === 'no' ? 'clear' : 'no' ?>" aria-pressed="<?= $my === 'no' ? 'true' : 'false' ?>">✗ Kann nicht</button>
   </form><?php endif ?>
   <?php if ($isHead): ?>
-  <details><summary class="note">Leiter ergänzen / streichen, Bedarf<?= $no ? ' · ' . count($no) . ' kann nicht' : '' ?></summary>
+  <details class="edit"><summary class="btn ghost small">Leiter ergänzen / streichen · Bedarf<?= $no ? ' · ' . count($no) . ' kann nicht' : '' ?></summary>
     <div class="stack">
       <?php foreach ($yes as $lid => $r): ?>
         <form method="post" class="row between nowrap"><?= csrf_field() ?><input type="hidden" name="action" value="set"><input type="hidden" name="event_id" value="<?= (int)$ev['id'] ?>"><input type="hidden" name="leader_id" value="<?= (int)$lid ?>">
@@ -285,7 +285,7 @@ foreach ($secEvents as $ev):
       <?php foreach ($no as $r): ?><p class="note">✗ <?= e($r['name']) ?> kann nicht<?= $r['note'] !== '' ? ' · ' . e($r['note']) : '' ?></p><?php endforeach ?>
       <?php $others = array_filter($leaders, fn($l) => !isset($yes[$l['id']])); if ($others): ?>
       <form method="post" class="row nowrap"><?= csrf_field() ?><input type="hidden" name="action" value="set"><input type="hidden" name="event_id" value="<?= (int)$ev['id'] ?>"><input type="hidden" name="status" value="yes">
-        <select name="leader_id" class="grow" aria-label="Leiter eintragen"><?php foreach ($others as $l): ?><option value="<?= (int)$l['id'] ?>"><?= e($l['name']) ?><?= isset($no[$l['id']]) ? ' (kann nicht)' : '' ?></option><?php endforeach ?></select>
+        <select name="leader_id" class="grow" aria-label="Leiter eintragen"><?php foreach ($others as $l): $b = $busy[$ev['id']][$l['id']] ?? null; ?><option value="<?= (int)$l['id'] ?>" <?= $b ? 'disabled' : '' ?>><?= e($l['name']) ?><?= $b ? ' (leitet ' . e($b['title']) . ')' : (isset($no[$l['id']]) ? ' (kann nicht)' : '') ?></option><?php endforeach ?></select>
         <button class="btn ghost small">Eintragen</button></form>
       <?php endif ?>
       <form method="post" class="row nowrap"><?= csrf_field() ?><input type="hidden" name="action" value="needed"><input type="hidden" name="event_id" value="<?= (int)$ev['id'] ?>">
@@ -300,29 +300,6 @@ foreach ($secEvents as $ev):
 <?php endforeach;
     if ($secNo === 1): ?></details><?php endif;
 endforeach ?>
-<?php if (!$events): ?><div class="card"><p><?= $isHead ? 'Noch keine Events. Erstelle unten unter «Saisonplanung» eine Serie für die Saison.' : 'Noch keine Events geplant.' ?></p></div><?php endif ?>
+<?php if (!$events): ?><div class="card"><p><?= $isHead ? 'Noch keine Events. Erstelle unter <a href="saison.php">Saisonplanung</a> eine Serie für die Saison.' : 'Noch keine Events geplant.' ?></p></div><?php endif ?>
 <p class="note"><a href="?alle=<?= $showPast ? '0' : '1' ?>"><?= $showPast ? 'Nur kommende Events zeigen' : 'Ganze Saison zeigen (auch vergangene)' ?></a></p>
-<?php if ($isHead): ?>
-<details class="card" id="saisonplanung" <?= $events ? '' : 'open' ?>><summary><b>Saisonplanung</b> <span class="note">(1× pro Saison)</span></summary>
-  <div class="stack">
-  <h3>Termine als Serie erstellen</h3>
-  <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="series">
-    <p class="note">Erstellt für jede Woche im Zeitraum einen Entwurf aus der Vorlage (am Wochentag der Vorlage). So können sich die Leiter schon zu Saisonbeginn eintragen.
-      Eltern sehen die Termine erst, wenn du sie einzeln freischaltest.</p>
-    <label for="sv">Vorlage</label>
-    <select id="sv" name="template_id"><?php foreach ($templates as $t): ?><option value="<?= (int)$t['id'] ?>"><?= e($t['name']) ?></option><?php endforeach ?></select>
-    <div class="row">
-      <span class="stack grow"><label for="sf">Von</label><input type="date" id="sf" name="from" required></span>
-      <span class="stack grow"><label for="st">Bis</label><input type="date" id="st" name="to" required></span>
-    </div>
-    <button class="btn small">Serie erstellen</button>
-  </form>
-  <h3>Leiterplan als Excel</h3>
-  <p class="note">Plan exportieren, in Excel bearbeiten und wieder importieren.</p>
-  <div class="row"><a class="btn ghost small" href="?export=1">Export Excel</a><a class="btn ghost small" href="import.php?art=plan">Import Excel</a></div>
-  <h3>Gesamtplan drucken</h3>
-  <div class="row"><a class="btn ghost small" href="?druck=alle">Gesamtplan aller Leiter</a></div>
-  </div>
-</details>
-<?php endif ?>
 <?php layout_foot();

@@ -191,6 +191,55 @@ function fmt_deadline(string $dt): string
     return WEEKDAYS[(int)date('w', $t)] . ' ' . date('d.m., H:i', $t);
 }
 
+/** Zeitspanne aus «13:30–16:00» oder «9.00 Uhr» als Minuten [von, bis]; bis = null, wenn unbekannt. */
+function time_range(string $text): ?array
+{
+    if (!preg_match_all('/(\d{1,2})[:.](\d{2})/', $text, $m, PREG_SET_ORDER)) {
+        return null;
+    }
+    $min = array_map(fn($x) => (int)$x[1] * 60 + (int)$x[2], $m);
+    return [$min[0], isset($min[1]) && $min[1] > $min[0] ? $min[1] : null];
+}
+
+/** Überschneiden sich zwei Events am selben Tag zeitlich? */
+function events_overlap(array $a, array $b): bool
+{
+    if ($a['date'] !== $b['date']) {
+        return false;
+    }
+    $ra = time_range($a['time_text']);
+    $rb = time_range($b['time_text']);
+    if (!$ra || !$rb) {
+        return trim($a['time_text']) !== '' && trim($a['time_text']) === trim($b['time_text']);
+    }
+    if ($ra[1] === null || $rb[1] === null) {
+        return $ra[0] === $rb[0];
+    }
+    return $ra[0] < $rb[1] && $rb[0] < $ra[1];
+}
+
+/** Anderes Event zur selben Zeit, für das der Leiter schon eingetragen oder einer Gruppe zugeteilt ist. */
+function leader_busy(int $eventId, int $leaderId): ?array
+{
+    $pdo = db();
+    $st = $pdo->prepare('SELECT * FROM events WHERE id = ?');
+    $st->execute([$eventId]);
+    $ev = $st->fetch();
+    if (!$ev) {
+        return null;
+    }
+    $st = $pdo->prepare("SELECT e.* FROM events e WHERE e.date = :d AND e.id <> :id AND e.status <> 'cancelled' AND (
+        EXISTS (SELECT 1 FROM leader_availability a WHERE a.event_id = e.id AND a.leader_id = :l AND a.status = 'yes')
+        OR EXISTS (SELECT 1 FROM group_leaders g WHERE g.event_id = e.id AND g.leader_id = :l))");
+    $st->execute(['d' => $ev['date'], 'id' => $eventId, 'l' => $leaderId]);
+    foreach ($st->fetchAll() as $other) {
+        if (events_overlap($ev, $other)) {
+            return $other;
+        }
+    }
+    return null;
+}
+
 function deadline_passed(array $event): bool
 {
     return time() > strtotime($event['deadline']);
@@ -288,10 +337,11 @@ function layout_foot(): void
 function admin_nav(): array
 {
     $me = current_leader();
-    $nav = ['index.php' => 'Events', 'plan.php' => 'Plan'];
-    if (has_role($me, 'hauptleiter')) {
-        $nav['families.php'] = 'Familien';
-        $nav['templates.php'] = 'Vorlagen';
+    $head = has_role($me, 'hauptleiter');
+    $nav = ['index.php' => $head ? 'Events' : 'Einsätze', 'plan.php' => 'Plan'];
+    if ($head) {
+        // Familien, Vorlagen und Serien braucht es meist nur einmal pro Saison
+        $nav['saison.php'] = 'Saisonplanung';
     }
     $nav['leaders.php'] = has_role($me, 'hauptleiter') ? 'Team' : 'Einstellungen';
     if (has_role($me, 'admin')) {

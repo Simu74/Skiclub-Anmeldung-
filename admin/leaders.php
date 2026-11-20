@@ -45,6 +45,22 @@ if (is_post()) {
             ]);
             flash(ROLES[$role] . ' hinzugefügt.');
         }
+    } elseif ($isAdmin && $a === 'edit') {
+        $name = trim((string)($_POST['name'] ?? ''));
+        $user = trim((string)($_POST['username'] ?? ''));
+        $exists = $pdo->prepare('SELECT 1 FROM leaders WHERE username = ? AND id <> ?');
+        $exists->execute([$user, $lid]);
+        if ($name === '' || $user === '') {
+            flash('Name und Benutzername dürfen nicht leer sein.');
+        } elseif ($exists->fetchColumn()) {
+            flash('Diesen Benutzernamen gibt es schon.');
+        } elseif ($lid === (int)$me['id'] && $role !== 'admin' && admin_count() <= 1) {
+            flash('Es braucht mindestens einen Admin.');
+        } else {
+            $pdo->prepare('UPDATE leaders SET name = ?, phone = ?, username = ?, role = ?, is_admin = ? WHERE id = ?')
+                ->execute([$name, trim((string)($_POST['phone'] ?? '')), $user, $role, $role === 'admin' ? 1 : 0, $lid]);
+            flash('Gespeichert.');
+        }
     } elseif ($isAdmin && $a === 'role') {
         if ($lid === (int)$me['id'] && $role !== 'admin' && admin_count() <= 1) {
             flash('Es braucht mindestens einen Admin.');
@@ -67,7 +83,12 @@ if (is_post()) {
     redirect('leaders.php');
 }
 
-$leaders = $isHead ? $pdo->query("SELECT * FROM leaders ORDER BY CASE role WHEN 'admin' THEN 1 WHEN 'hauptleiter' THEN 2 ELSE 3 END, name")->fetchAll() : [];
+// Team nach Rolle unterteilt (Admins, Hauptleiter, Leiter), innerhalb alphabetisch A–Z
+$byRole = ['admin' => [], 'hauptleiter' => [], 'leiter' => []];
+if ($isHead) {
+    foreach ($pdo->query('SELECT * FROM leaders ORDER BY name COLLATE NOCASE') as $l) $byRole[$l['role']][] = $l;
+}
+$roleTitles = ['leiter' => 'Leiter', 'hauptleiter' => 'Hauptleiter', 'admin' => 'Admins'];
 layout_head($isHead ? 'Team' : 'Einstellungen', admin_nav(), 'leaders.php');
 ?>
 <?php if (!$isHead): ?>
@@ -82,32 +103,38 @@ layout_head($isHead ? 'Team' : 'Einstellungen', admin_nav(), 'leaders.php');
 <?php else: ?>
 <div><p class="eyebrow">Team</p><h1>Leiter &amp; Rollen</h1></div>
 
+<?php foreach ($byRole as $rk => $people): if (!$people) continue; ?>
 <div class="card">
-  <?php foreach ($leaders as $l): ?>
-    <div class="gkid"><span class="nm"><b><?= e($l['name']) ?></b> <span class="note"><?= e($l['username']) ?><?= $l['phone'] !== '' ? ' · ' . e($l['phone']) : '' ?></span></span>
-      <?php if ($isAdmin): ?>
-        <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="role"><input type="hidden" name="leader_id" value="<?= (int)$l['id'] ?>">
-          <select name="role" data-autosubmit aria-label="Rolle von <?= e($l['name']) ?>"><?php foreach (ROLES as $rk => $rv): ?><option value="<?= $rk ?>" <?= $l['role'] === $rk ? 'selected' : '' ?>><?= $rv ?></option><?php endforeach ?></select>
-          <noscript><button class="btn ghost small">OK</button></noscript></form>
-      <?php else: ?>
-        <span class="pill"><?= ROLES[$l['role']] ?></span>
-      <?php endif ?>
-    </div>
-    <?php if ($isAdmin && (int)$l['id'] !== (int)$me['id']): ?>
-      <details class="note"><summary>Passwort zurücksetzen / entfernen</summary>
+  <div class="row between"><h3><?= $roleTitles[$rk] ?></h3><span class="pill"><?= count($people) ?></span></div>
+  <?php foreach ($people as $l): ?>
+    <?php if ($isAdmin): ?>
+    <details class="person"><summary class="gkid"><span class="nm"><b><?= e($l['name']) ?></b> <span class="note"><?= e($l['username']) ?><?= $l['phone'] !== '' ? ' · ' . e($l['phone']) : '' ?></span></span><span class="note">bearbeiten</span></summary>
+      <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="edit"><input type="hidden" name="leader_id" value="<?= (int)$l['id'] ?>">
+        <label for="en<?= (int)$l['id'] ?>">Name</label><input type="text" id="en<?= (int)$l['id'] ?>" name="name" value="<?= e($l['name']) ?>" required>
+        <label for="ep<?= (int)$l['id'] ?>">Handy (für WhatsApp)</label><input type="tel" id="ep<?= (int)$l['id'] ?>" name="phone" value="<?= e($l['phone']) ?>">
+        <label for="eu<?= (int)$l['id'] ?>">Benutzername</label><input type="text" id="eu<?= (int)$l['id'] ?>" name="username" value="<?= e($l['username']) ?>" required>
+        <label for="er<?= (int)$l['id'] ?>">Rolle</label>
+        <select id="er<?= (int)$l['id'] ?>" name="role"><?php foreach (ROLES as $rk2 => $rv): ?><option value="<?= $rk2 ?>" <?= $l['role'] === $rk2 ? 'selected' : '' ?>><?= $rv ?></option><?php endforeach ?></select>
+        <button class="btn small">Speichern</button>
+      </form>
+      <?php if ((int)$l['id'] !== (int)$me['id']): ?>
         <form method="post" class="row nowrap"><?= csrf_field() ?><input type="hidden" name="action" value="reset"><input type="hidden" name="leader_id" value="<?= (int)$l['id'] ?>">
           <input type="text" name="password" minlength="10" placeholder="Neues Passwort (mind. 10 Zeichen)" aria-label="Neues Passwort" required>
-          <button class="btn ghost small">Setzen</button></form>
+          <button class="btn ghost small">Passwort setzen</button></form>
         <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="leader_id" value="<?= (int)$l['id'] ?>"><button class="linkbtn"><?= e($l['name']) ?> entfernen</button></form>
-      </details>
+      <?php endif ?>
+    </details>
+    <?php else: ?>
+    <div class="gkid"><span class="nm"><b><?= e($l['name']) ?></b> <span class="note"><?= e($l['username']) ?><?= $l['phone'] !== '' ? ' · ' . e($l['phone']) : '' ?></span></span></div>
     <?php endif ?>
   <?php endforeach ?>
 </div>
+<?php endforeach ?>
 
 <div class="card">
   <h3>Was darf welche Rolle?</h3>
-  <p><b>Leiter:</b> trägt sich im Leiterplan ein, leitet Gruppen, erfasst Präsenz und Rückmeldungen zu Kindern. Nur Leiter erscheinen im Leiterplan und in den Gruppen.</p>
-  <p><b>Hauptleiter:</b> plant: Events erstellen, freischalten und absagen, Leiterplan führen, Gruppen einteilen, Familien, Vorlagen, WhatsApp-Nachrichten. Leitet selber keine Gruppe.</p>
+  <p><b>Leiter:</b> trägt sich in «Meine Planung» ein, leitet Gruppen, erfasst Präsenz und Rückmeldungen zu Kindern. Nur Leiter erscheinen in der Leiterplanung und in den Gruppen.</p>
+  <p><b>Hauptleiter:</b> plant: Events erstellen, freischalten und absagen, Leiterplanung führen, Gruppen einteilen, Familien, Vorlagen, WhatsApp-Nachrichten. Leitet selber keine Gruppe.</p>
   <p><b>Admin:</b> alles vom Hauptleiter, zusätzlich Team und Rollen verwalten, Statistik, Events löschen.</p>
   <p class="note">Wer plant und selber leitet, braucht zwei Logins: eines als Hauptleiter und eines als Leiter.</p>
 </div>
