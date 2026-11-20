@@ -169,7 +169,7 @@ $myGroups = array_keys(array_filter($groups, fn($g) => (int)$g['leader_id'] === 
 
 layout_head($ev['title'], admin_nav(), 'index.php');
 ?>
-<div><p class="eyebrow"><a href="index.php">Events</a> · <?= e(category_name($ev)) ?></p>
+<div><p class="eyebrow"><a href="index.php"><?= $isHead ? 'Events' : 'Einsätze' ?></a> · <?= e(category_name($ev)) ?></p>
   <h1><?= e($ev['title']) ?></h1>
   <p class="date"><?= fmt_date($ev['date']) ?><?= $ev['time_text'] !== '' ? ' · ' . e($ev['time_text']) : '' ?> · Anmeldeschluss <?= fmt_deadline($ev['deadline']) ?></p></div>
 
@@ -220,7 +220,7 @@ layout_head($ev['title'], admin_nav(), 'index.php');
 </details>
 <?php endif ?>
 
-<?php if (!$isHead && $myGroups): ?><p class="card">Du leitest <b>Gruppe <?= implode(', ', $myGroups) ?></b>.</p><?php endif ?>
+<?php if (!$isHead && $myGroups): ?><div class="card"><p>Du leitest <b>Gruppe <?= implode(", ", $myGroups) ?></b>.</p></div><?php endif ?>
 
 <div class="seg" role="tablist">
   <?php foreach ($tabs as $k => $v): ?><a class="segbtn" href="<?= $self ?>&tab=<?= $k ?>" <?= $tab === $k ? 'aria-current="page"' : '' ?>><?= e($v) ?><?= $k === 'anmeldungen' ? ' (' . count($kidsIn) . ')' : '' ?></a><?php endforeach ?>
