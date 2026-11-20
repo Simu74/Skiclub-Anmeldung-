@@ -99,7 +99,8 @@ if (is_post()) {
                 $id = (int)$k['id'];
                 if (in_array($id, $chosen, true) && $k['skill'] >= $event['min_skill']) {
                     $up->execute([$event['id'], $id, 'in', '', $note]);
-                } elseif (($before[$id] ?? '') === 'in') {
+                } elseif (($before[$id] ?? '') === 'in' || (!$chosen && !isset($before[$id]))) {
+                    // abgemeldet, oder «niemand kommt» als Antwort festhalten
                     $up->execute([$event['id'], $id, 'out', 'Verhindert', '']);
                 }
             }
@@ -162,6 +163,38 @@ if ($view === 'kinder'): ?>
     exit;
 endif;
 
+/** Formular «Anmelden / Anmeldung ändern» für ein Event. */
+function render_register_form(array $ev, array $kids, array $r, bool $answered, array $drivers): void
+{
+?>
+        <form method="post" class="stack"><?= csrf_field() ?>
+          <input type="hidden" name="action" value="register"><input type="hidden" name="event_id" value="<?= (int)$ev['id'] ?>">
+          <p class="note">Ihre Kinder sind vorgewählt. Häkchen entfernen, wer nicht kommt.</p>
+          <?php foreach ($kids as $k):
+              $ok = $k['skill'] >= $ev['min_skill'];
+              $checked = $ok && ($answered ? ($r[$k['id']]['status'] ?? '') === 'in' : true); ?>
+            <label class="kid<?= $ok ? '' : ' disabled' ?>">
+              <input type="checkbox" name="kids[]" value="<?= (int)$k['id'] ?>" <?= $checked ? 'checked' : '' ?> <?= $ok ? '' : 'disabled' ?>>
+              <span class="piste p-<?= piste((int)$k['skill']) ?>"></span>
+              <span><span class="nm"><?= e($k['first_name']) ?></span><br>
+              <span class="sub">Jahrgang <?= (int)$k['birth_year'] ?><?= $ev['type'] === 'race' ? ' · Kategorie ' . race_category((int)$k['birth_year']) : '' ?><?= $ok ? '' : ' · für dieses Training noch nicht freigegeben' ?></span></span>
+            </label>
+          <?php endforeach ?>
+          <label class="switch"><span><b>Ich kann fahren</b><br><span class="note">für Fahrgemeinschaften</span></span>
+            <input type="checkbox" name="driver" value="1" data-toggle="seats-<?= (int)$ev['id'] ?>" <?= isset($drivers[$ev['id']]) ? 'checked' : '' ?>></label>
+          <div class="stack" id="seats-<?= (int)$ev['id'] ?>" <?= isset($drivers[$ev['id']]) ? '' : 'hidden' ?>>
+            <label class="switch"><b>Freie Plätze</b>
+              <select name="seats"><?php for ($i = 1; $i <= 8; $i++): ?><option <?= ($drivers[$ev['id']]['seats'] ?? 3) == $i ? 'selected' : '' ?>><?= $i ?></option><?php endfor ?></select></label>
+            <label for="dn-<?= (int)$ev['id'] ?>" class="note">Abfahrt / Treffpunkt (freiwillig)</label>
+            <input type="text" id="dn-<?= (int)$ev['id'] ?>" name="driver_note" maxlength="200" value="<?= e($drivers[$ev['id']]['note'] ?? '') ?>" placeholder="z.B. 8:45 ab Dorfplatz, Hin- und Rückfahrt">
+          </div>
+          <label for="note-<?= (int)$ev['id'] ?>" class="note">Bemerkung an die Leiter (freiwillig)</label>
+          <input type="text" id="note-<?= (int)$ev['id'] ?>" name="note" maxlength="300" placeholder="z.B. wird um 15:30 abgeholt">
+          <button class="btn" data-count-label="Anmeldung senden">Anmeldung senden</button>
+        </form>
+<?php
+}
+
 $st = $pdo->prepare("SELECT * FROM events WHERE status <> 'draft' AND date >= date('now', 'localtime') ORDER BY date, id");
 $st->execute();
 $events = $st->fetchAll();
@@ -197,7 +230,23 @@ $drivers = array_column($st->fetchAll(), null, 'event_id');
       $answered = (bool)$r;
       $closed = deadline_passed($ev);
       $cancelled = $ev['status'] === 'cancelled';
+      // Hat die Familie geantwortet, aber niemand kommt: Event eingeklappt, nur «Anmeldung ändern»
+      $compact = $answered && !$mineIn && !$cancelled;
   ?>
+  <?php if ($compact): ?>
+  <article class="card compact">
+    <div class="row between"><span class="date"><?= fmt_date($ev['date']) ?><?= $ev['time_text'] !== '' ? ' · ' . e($ev['time_text']) : '' ?></span>
+      <span class="pill <?= e($ev['type']) ?>"><?= e(category_name($ev)) ?></span></div>
+    <h3><?= e($ev['title']) ?></h3>
+    <p class="note">Niemand angemeldet<?= isset($drivers[$ev['id']]) ? ' · Sie fahren mit ' . (int)$drivers[$ev['id']]['seats'] . ' Plätzen' : '' ?></p>
+    <?php if (!$closed): ?>
+    <details class="sheet">
+      <summary class="btn ghost small">Anmeldung ändern</summary>
+      <?php render_register_form($ev, $kids, $r, $answered, $drivers); ?>
+    </details>
+    <?php endif ?>
+  </article>
+  <?php continue; endif ?>
   <article class="card">
     <div class="row between"><span class="date"><?= fmt_date($ev['date']) ?><?= $ev['time_text'] !== '' ? ' · ' . e($ev['time_text']) : '' ?></span>
       <span class="pill <?= e($ev['type']) ?>"><?= e(category_name($ev)) ?></span></div>
@@ -229,31 +278,7 @@ $drivers = array_column($st->fetchAll(), null, 'event_id');
       <?php if (!$closed): ?>
       <details class="sheet" <?= $answered ? '' : 'open' ?>>
         <summary class="btn<?= $answered ? ' ghost' : '' ?>"><?= $answered ? 'Anmeldung ändern' : 'Anmelden' ?></summary>
-        <form method="post" class="stack"><?= csrf_field() ?>
-          <input type="hidden" name="action" value="register"><input type="hidden" name="event_id" value="<?= (int)$ev['id'] ?>">
-          <p class="note">Ihre Kinder sind vorgewählt. Häkchen entfernen, wer nicht kommt.</p>
-          <?php foreach ($kids as $k):
-              $ok = $k['skill'] >= $ev['min_skill'];
-              $checked = $ok && ($answered ? ($r[$k['id']]['status'] ?? '') === 'in' : true); ?>
-            <label class="kid<?= $ok ? '' : ' disabled' ?>">
-              <input type="checkbox" name="kids[]" value="<?= (int)$k['id'] ?>" <?= $checked ? 'checked' : '' ?> <?= $ok ? '' : 'disabled' ?>>
-              <span class="piste p-<?= piste((int)$k['skill']) ?>"></span>
-              <span><span class="nm"><?= e($k['first_name']) ?></span><br>
-              <span class="sub">Jahrgang <?= (int)$k['birth_year'] ?><?= $ev['type'] === 'race' ? ' · Kategorie ' . race_category((int)$k['birth_year']) : '' ?><?= $ok ? '' : ' · für dieses Training noch nicht freigegeben' ?></span></span>
-            </label>
-          <?php endforeach ?>
-          <label class="switch"><span><b>Ich kann fahren</b><br><span class="note">für Fahrgemeinschaften</span></span>
-            <input type="checkbox" name="driver" value="1" data-toggle="seats-<?= (int)$ev['id'] ?>" <?= isset($drivers[$ev['id']]) ? 'checked' : '' ?>></label>
-          <div class="stack" id="seats-<?= (int)$ev['id'] ?>" <?= isset($drivers[$ev['id']]) ? '' : 'hidden' ?>>
-            <label class="switch"><b>Freie Plätze</b>
-              <select name="seats"><?php for ($i = 1; $i <= 8; $i++): ?><option <?= ($drivers[$ev['id']]['seats'] ?? 3) == $i ? 'selected' : '' ?>><?= $i ?></option><?php endfor ?></select></label>
-            <label for="dn-<?= (int)$ev['id'] ?>" class="note">Abfahrt / Treffpunkt (freiwillig)</label>
-            <input type="text" id="dn-<?= (int)$ev['id'] ?>" name="driver_note" maxlength="200" value="<?= e($drivers[$ev['id']]['note'] ?? '') ?>" placeholder="z.B. 8:45 ab Dorfplatz, Hin- und Rückfahrt">
-          </div>
-          <label for="note-<?= (int)$ev['id'] ?>" class="note">Bemerkung an die Leiter (freiwillig)</label>
-          <input type="text" id="note-<?= (int)$ev['id'] ?>" name="note" maxlength="300" placeholder="z.B. wird um 15:30 abgeholt">
-          <button class="btn" data-count-label="Anmeldung senden">Anmeldung senden</button>
-        </form>
+        <?php render_register_form($ev, $kids, $r, $answered, $drivers); ?>
       </details>
       <?php else: ?>
         <p class="note">Anmeldeschluss vorbei. Änderungen bitte direkt der Leitung melden.</p>

@@ -4,6 +4,7 @@ require dirname(__DIR__) . '/inc/bootstrap.php';
 
 $me = require_leader();
 $isAdmin = has_role($me, 'admin');
+$isHead = has_role($me, 'hauptleiter');   // Leiter sehen nur ihre Einstellungen, nicht das ganze Team
 $pdo = db();
 
 function admin_count(): int
@@ -66,9 +67,19 @@ if (is_post()) {
     redirect('leaders.php');
 }
 
-$leaders = $pdo->query("SELECT * FROM leaders ORDER BY CASE role WHEN 'admin' THEN 1 WHEN 'hauptleiter' THEN 2 ELSE 3 END, name")->fetchAll();
-layout_head('Team', admin_nav(), 'leaders.php');
+$leaders = $isHead ? $pdo->query("SELECT * FROM leaders ORDER BY CASE role WHEN 'admin' THEN 1 WHEN 'hauptleiter' THEN 2 ELSE 3 END, name")->fetchAll() : [];
+layout_head($isHead ? 'Team' : 'Einstellungen', admin_nav(), 'leaders.php');
 ?>
+<?php if (!$isHead): ?>
+<div><p class="eyebrow"><?= e($me['name']) ?></p><h1>Einstellungen</h1></div>
+
+<div class="card stack">
+  <h3>Mein Plan drucken</h3>
+  <p class="note">Für die ganze Saison, zum Ausdrucken oder als PDF.</p>
+  <a class="btn" href="plan.php?druck=mein">Meine Einsätze</a>
+  <a class="btn ghost" href="plan.php?druck=termine">Alle Termine (Übersicht)</a>
+</div>
+<?php else: ?>
 <div><p class="eyebrow">Team</p><h1>Leiter &amp; Rollen</h1></div>
 
 <div class="card">
@@ -95,9 +106,10 @@ layout_head('Team', admin_nav(), 'leaders.php');
 
 <div class="card">
   <h3>Was darf welche Rolle?</h3>
-  <p><b>Leiter:</b> sieht Events und Gruppen, meldet sich als Gruppenleiter, erfasst Präsenz und Rückmeldungen zu Kindern.</p>
-  <p><b>Hauptleiter:</b> zusätzlich Events erstellen, freischalten und absagen, Kategorien und Vorlagen, Gruppen einteilen, Leiter zuweisen, Familien erfassen, WhatsApp-Nachrichten.</p>
-  <p><b>Admin:</b> alles, zusätzlich Team und Rollen verwalten, Statistik, Events löschen.</p>
+  <p><b>Leiter:</b> trägt sich im Leiterplan ein, leitet Gruppen, erfasst Präsenz und Rückmeldungen zu Kindern. Nur Leiter erscheinen im Leiterplan und in den Gruppen.</p>
+  <p><b>Hauptleiter:</b> plant: Events erstellen, freischalten und absagen, Leiterplan führen, Gruppen einteilen, Familien, Vorlagen, WhatsApp-Nachrichten. Leitet selber keine Gruppe.</p>
+  <p><b>Admin:</b> alles vom Hauptleiter, zusätzlich Team und Rollen verwalten, Statistik, Events löschen.</p>
+  <p class="note">Wer plant und selber leitet, braucht zwei Logins: eines als Hauptleiter und eines als Leiter.</p>
 </div>
 
 <?php if ($isAdmin): ?>
@@ -112,6 +124,7 @@ layout_head('Team', admin_nav(), 'leaders.php');
     <button class="btn">Hinzufügen</button>
   </form>
 </details>
+<?php endif ?>
 <?php endif ?>
 
 <form method="post" class="card stack"><?= csrf_field() ?><input type="hidden" name="action" value="phone">

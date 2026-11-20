@@ -19,11 +19,11 @@ if (!$isHead && $ev['status'] === 'draft') {
 }
 $self = 'event.php?id=' . $id;
 
-$tabs = ['anmeldungen' => 'Anmeldungen', 'praesenz' => 'Präsenz', 'gruppen' => 'Gruppen', 'rueckmeldung' => 'Rückmeldungen'];
-if ($isHead) {
-    $tabs['whatsapp'] = 'WhatsApp';
-}
-$tab = isset($tabs[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'anmeldungen';
+// Reiter in der Reihenfolge, wie sie gebraucht werden
+$tabs = $isHead
+    ? ['anmeldungen' => 'Anmeldungen', 'gruppen' => 'Gruppen', 'whatsapp' => 'WhatsApp', 'praesenz' => 'Präsenz', 'rueckmeldung' => 'Rückmeldungen']
+    : ['praesenz' => 'Präsenz', 'rueckmeldung' => 'Rückmeldungen', 'gruppen' => 'Gruppen'];
+$tab = isset($tabs[$_GET['tab'] ?? '']) ? $_GET['tab'] : array_key_first($tabs);
 
 // Aktionen und wer sie ausführen darf
 $headOnly = ['status', 'info', 'regroup', 'move', 'leader', 'add_kid', 'remove_kid', 'upload', 'delete_file', 'feedback_done'];
@@ -31,7 +31,7 @@ $headOnly = ['status', 'info', 'regroup', 'move', 'leader', 'add_kid', 'remove_k
 if (is_post()) {
     csrf_check();
     $a = $_POST['action'] ?? '';
-    $back = $self . '&tab=' . (isset($tabs[$_POST['tab'] ?? '']) ? $_POST['tab'] : 'anmeldungen');
+    $back = $self . '&tab=' . (isset($tabs[$_POST['tab'] ?? '']) ? $_POST['tab'] : array_key_first($tabs));
     if (in_array($a, $headOnly, true) && !$isHead || $a === 'delete' && !has_role($me, 'admin')) {
         http_response_code(403);
         exit('Dafür fehlt die Berechtigung.');
@@ -68,10 +68,13 @@ if (is_post()) {
             flash('Leiter zugewiesen.');
             break;
         case 'add_kid':
-            $pdo->prepare("INSERT INTO registrations (event_id, kid_id, status, note) VALUES (?, ?, 'in', 'durch Leitung')
-                ON CONFLICT(event_id, kid_id) DO UPDATE SET status = 'in', reason = '', updated_at = datetime('now')")
-                ->execute([$id, (int)$_POST['kid_id']]);
-            flash('Kind angemeldet.');
+            $add = $pdo->prepare("INSERT INTO registrations (event_id, kid_id, status, note) VALUES (?, ?, 'in', 'durch Leitung')
+                ON CONFLICT(event_id, kid_id) DO UPDATE SET status = 'in', reason = '', updated_at = datetime('now')");
+            $ids = array_unique(array_filter(array_map('intval', (array)($_POST['kid_ids'] ?? []))));
+            foreach ($ids as $kid) {
+                $add->execute([$id, $kid]);
+            }
+            flash($ids ? (count($ids) === 1 ? 'Kind angemeldet.' : count($ids) . ' Kinder angemeldet.') : 'Bitte mindestens ein Kind wählen.');
             break;
         case 'remove_kid':
             $pdo->prepare("UPDATE registrations SET status = 'out', reason = 'durch Leitung', updated_at = datetime('now') WHERE event_id = ? AND kid_id = ?")
@@ -80,9 +83,12 @@ if (is_post()) {
             break;
         case 'presence':
             $here = array_map('intval', (array)($_POST['here'] ?? []));
+            // Nur die Kinder speichern, die auf dem Formular standen (Leiter sehen nur ihre Gruppe)
+            $shown = array_map('intval', (array)($_POST['shown'] ?? []));
             $pdo->beginTransaction();
             $set = $pdo->prepare('UPDATE registrations SET attended = ? WHERE event_id = ? AND kid_id = ?');
             foreach (registered_kids($id) as $k) {
+                if (!in_array((int)$k['id'], $shown, true)) continue;
                 $set->execute([in_array((int)$k['id'], $here, true) ? 1 : 0, $id, $k['id']]);
             }
             $pdo->prepare('UPDATE events SET attendance_taken = 1 WHERE id = ?')->execute([$id]);
@@ -90,7 +96,7 @@ if (is_post()) {
             flash('Präsenz gespeichert: ' . count($here) . ' Kinder da.');
             break;
         case 'availability':
-            $s = $_POST['status'] ?? '';
+            $s = leads($me) ? ($_POST['status'] ?? '') : '';
             if ($s === 'clear') {
                 $pdo->prepare('DELETE FROM leader_availability WHERE event_id = ? AND leader_id = ?')->execute([$id, $me['id']]);
             } elseif (in_array($s, ['yes', 'no'], true)) {
@@ -154,12 +160,12 @@ $st = $pdo->prepare('SELECT * FROM families f WHERE NOT EXISTS (SELECT 1 FROM re
     WHERE r.event_id = ? AND k.family_id = f.id) AND EXISTS (SELECT 1 FROM kids k WHERE k.family_id = f.id AND k.active = 1) ORDER BY name');
 $st->execute([$id]);
 $silent = $st->fetchAll();
-$leaders = $pdo->query('SELECT id, name, phone FROM leaders ORDER BY name')->fetchAll();
+$leaders = $pdo->query("SELECT id, name, phone FROM leaders WHERE role = 'leiter' ORDER BY name")->fetchAll();
 $leaderById = array_column($leaders, null, 'id');
 $st = $pdo->prepare('SELECT note, k.first_name FROM registrations r JOIN kids k ON k.id = r.kid_id WHERE r.event_id = ? AND r.status = \'in\' AND note <> \'\'');
 $st->execute([$id]);
 $notes = $st->fetchAll();
-$st = $pdo->prepare('SELECT a.*, l.name FROM leader_availability a JOIN leaders l ON l.id = a.leader_id WHERE a.event_id = ? ORDER BY a.status DESC, l.name');
+$st = $pdo->prepare("SELECT a.*, l.name FROM leader_availability a JOIN leaders l ON l.id = a.leader_id WHERE a.event_id = ? AND l.role = 'leiter' ORDER BY a.status DESC, l.name");
 $st->execute([$id]);
 $availability = $st->fetchAll();
 $avail = array_column($availability, null, 'leader_id');
@@ -221,7 +227,7 @@ layout_head($ev['title'], admin_nav(), 'index.php');
 </details>
 <?php endif ?>
 
-<?php if ($ev['status'] !== 'cancelled'): ?>
+<?php if ($ev['status'] !== 'cancelled' && leads($me)): ?>
 <form method="post" class="card stack"><?= csrf_field() ?><input type="hidden" name="action" value="availability"><input type="hidden" name="tab" value="<?= e($tab) ?>">
   <div class="row between"><h3>Leiterplan</h3>
     <?php if ($mine): ?><span class="pill <?= $mine['status'] === 'yes' ? 'open' : 'cancelled' ?>"><?= $mine['status'] === 'yes' ? 'Ich bin dabei' : 'Ich kann nicht' ?></span><?php endif ?></div>
@@ -256,15 +262,23 @@ layout_head($ev['title'], admin_nav(), 'index.php');
     <?php endforeach ?>
     <?php
     if ($isHead):
-        $allKids = $pdo->prepare("SELECT k.id, k.first_name, f.name FROM kids k JOIN families f ON f.id = k.family_id WHERE k.active = 1
+        $allKids = $pdo->prepare("SELECT k.id, k.first_name, k.skill, f.name FROM kids k JOIN families f ON f.id = k.family_id WHERE k.active = 1
             AND k.id NOT IN (SELECT kid_id FROM registrations WHERE event_id = ? AND status = 'in') ORDER BY k.first_name");
         $allKids->execute([$id]);
         $others = $allKids->fetchAll();
         if ($others): ?>
-    <form method="post" class="row nowrap"><?= csrf_field() ?><input type="hidden" name="action" value="add_kid">
-      <label for="addkid" class="sr">Kind hinzufügen</label>
-      <select id="addkid" name="kid_id"><?php foreach ($others as $o): ?><option value="<?= (int)$o['id'] ?>"><?= e($o['first_name'] . ' ' . $o['name']) ?></option><?php endforeach ?></select>
-      <button class="btn ghost small">Hinzufügen</button></form>
+    <details class="sheet"><summary class="btn ghost small">+ Kinder anmelden</summary>
+    <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="add_kid">
+      <p class="note">Mehrere Kinder antippen, dann unten «Anmelden».</p>
+      <input type="search" placeholder="Kind oder Familie suchen …" aria-label="Kind suchen" data-filter=".addkid">
+      <div class="kidpick">
+      <?php foreach ($others as $o): ?>
+        <label class="kid addkid" data-search="<?= e(mb_strtolower($o['first_name'] . ' ' . $o['name'])) ?>"><input type="checkbox" name="kid_ids[]" value="<?= (int)$o['id'] ?>">
+          <span class="piste p-<?= piste((int)$o['skill']) ?>"></span><span class="nm"><?= e($o['first_name'] . ' ' . $o['name']) ?></span></label>
+      <?php endforeach ?>
+      </div>
+      <button class="btn" data-count-label="Anmelden" data-count-name="kid_ids[]" data-count-empty="Kinder antippen">Anmelden</button></form>
+    </details>
     <?php endif; endif ?>
   </div>
   <?php if ($notes): ?><div class="card"><h3>Bemerkungen der Eltern</h3>
@@ -280,20 +294,28 @@ layout_head($ev['title'], admin_nav(), 'index.php');
     <?php endforeach ?></div>
   <?php endif ?>
 
-<?php elseif ($tab === 'praesenz'): ?>
+<?php elseif ($tab === 'praesenz'):
+    // Leiter mit eigener Gruppe sehen nur ihre Kinder
+    $presGroups = $groups ?: [0 => ['kids' => $kidsIn, 'leader_id' => null]];
+    $ownOnly = !$isHead && $myGroups;
+    if ($ownOnly) $presGroups = array_intersect_key($groups, array_flip($myGroups));
+    $presKids = [];
+    foreach ($presGroups as $pg) $presKids = array_merge($presKids, $pg['kids']); ?>
   <form method="post" class="card stack"><?= csrf_field() ?><input type="hidden" name="action" value="presence"><input type="hidden" name="tab" value="praesenz">
-    <h3>Wer war da?</h3>
+    <h3><?= $ownOnly ? 'Wer war da? Meine Gruppe' : 'Wer war da?' ?></h3>
     <p class="note"><?= $ev['attendance_taken'] ? 'Präsenz ist erfasst und zählt für die Statistik.' : 'Noch nicht erfasst. Alle Angemeldeten sind vorgewählt, bitte fehlende Kinder abwählen.' ?>
       <?= $isHead ? 'Kam ein Kind ohne Anmeldung, zuerst unter «Anmeldungen» hinzufügen.' : 'Kam ein Kind ohne Anmeldung, bitte einem Hauptleiter melden.' ?></p>
-    <?php foreach ($groups ?: [0 => ['kids' => $kidsIn, 'leader_id' => null]] as $g => $grp): ?>
+    <?php if (!$isHead && !$myGroups && $groups): ?><p class="note">Du bist noch keiner Gruppe zugeteilt, darum siehst du alle Kinder.</p><?php endif ?>
+    <?php foreach ($presGroups as $g => $grp): ?>
       <?php if ($g): ?><p class="eyebrow">Gruppe <?= $g ?><?= isset($leaderById[$grp['leader_id']]) ? ' · ' . e($leaderById[$grp['leader_id']]['name']) : '' ?></p><?php endif ?>
       <?php foreach ($grp['kids'] as $k): $here = $k['attended'] === null ? true : (bool)$k['attended']; ?>
+        <input type="hidden" name="shown[]" value="<?= (int)$k['id'] ?>">
         <label class="kid"><input type="checkbox" name="here[]" value="<?= (int)$k['id'] ?>" <?= $here ? 'checked' : '' ?>>
           <span class="piste p-<?= piste((int)$k['skill']) ?>"></span>
           <span class="nm"><?= e($k['first_name'] . ' ' . $k['family_name']) ?></span></label>
       <?php endforeach ?>
     <?php endforeach ?>
-    <?php if ($kidsIn): ?><button class="btn">Präsenz speichern</button><?php else: ?><p>Keine Anmeldungen.</p><?php endif ?>
+    <?php if ($presKids): ?><button class="btn">Präsenz speichern</button><?php else: ?><p>Keine Anmeldungen.</p><?php endif ?>
   </form>
 
 <?php elseif ($tab === 'gruppen'):
